@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <PackageId>TeTS.Integrations</PackageId>
+    <Version>1.0.0-beta.1</Version>
+    <Description>Official .NET client for the TeTS Integrations API v1: user provisioning, completion reports, and signed SSO launch URLs for integration partners.</Description>
+    <PackageTags>tets;lms;integrations;sso</PackageTags>
+    <PackageProjectUrl>https://github.com/your-training-provider/tets-integrations-dotnet</PackageProjectUrl>
+    <Copyright>Copyright (c) 2026 Training and eTracking Solutions</Copyright>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!-- Keep AssemblyInformationalVersion (and thus the SDK's User-Agent) free of the commit SHA;
+         SourceLink embedding/symbols are unaffected. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+</Project>

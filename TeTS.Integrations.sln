@@ -1,0 +1,45 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{66535AE2-3361-40EB-BAE7-A435F422756B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TeTS.Integrations", "src\TeTS.Integrations\TeTS.Integrations.csproj", "{5BDF7C22-B8F1-4FF3-A5EE-9EE4B899FBED}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{1166C1D5-3068-4B6F-9847-5B77EAFA560D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TeTS.Integrations.Tests", "tests\TeTS.Integrations.Tests\TeTS.Integrations.Tests.csproj", "{99273C50-7266-4867-B128-FC792E50D4F2}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{943D85D1-4AA1-43BB-9602-DE02515E5D2B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TeTS.SmokeTest", "samples\TeTS.SmokeTest\TeTS.SmokeTest.csproj", "{B34008FB-43CA-454B-AC68-F9000914D0CF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5BDF7C22-B8F1-4FF3-A5EE-9EE4B899FBED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5BDF7C22-B8F1-4FF3-A5EE-9EE4B899FBED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5BDF7C22-B8F1-4FF3-A5EE-9EE4B899FBED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5BDF7C22-B8F1-4FF3-A5EE-9EE4B899FBED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{99273C50-7266-4867-B128-FC792E50D4F2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{99273C50-7266-4867-B128-FC792E50D4F2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{99273C50-7266-4867-B128-FC792E50D4F2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{99273C50-7266-4867-B128-FC792E50D4F2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B34008FB-43CA-454B-AC68-F9000914D0CF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B34008FB-43CA-454B-AC68-F9000914D0CF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B34008FB-43CA-454B-AC68-F9000914D0CF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B34008FB-43CA-454B-AC68-F9000914D0CF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{5BDF7C22-B8F1-4FF3-A5EE-9EE4B899FBED} = {66535AE2-3361-40EB-BAE7-A435F422756B}
+		{99273C50-7266-4867-B128-FC792E50D4F2} = {1166C1D5-3068-4B6F-9847-5B77EAFA560D}
+		{B34008FB-43CA-454B-AC68-F9000914D0CF} = {943D85D1-4AA1-43BB-9602-DE02515E5D2B}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,796 @@
+openapi: 3.0.3
+info:
+  title: TeTS Integrations API
+  version: 1.0.0
+  description: |
+    REST API for integrator user provisioning, profile updates, completions
+    reporting, and SSO launch.
+
+    ## Authentication
+    Authenticate every request with an API key issued by TeTS, sent either as
+    `x-api-key: <key>` or `Authorization: Bearer <key>`.
+
+    ## Tenant scoping
+    Connection-scoped API keys resolve their organization automatically.
+    Unscoped keys on multi-org integrations must send the org root group UUID
+    on every request via the `X-Integration-Tenant-Id` header (GET routes also
+    accept the `organizationTenantId` query parameter).
+
+    ## Errors
+    All errors share one envelope: `{ "error", "code", "requestId", "details?" }`.
+    `code` values are stable contract; `requestId` (also returned on every
+    response as the `X-Request-Id` header) correlates with TeTS server logs —
+    include it in support requests.
+
+    ## Rate limiting
+    Responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and
+    `X-RateLimit-Reset` (epoch seconds). `429` responses include `Retry-After`
+    (seconds). Limits are applied per API key per route.
+servers:
+  - url: https://{host}
+    variables:
+      host:
+        default: courses.example.com
+security:
+  - ApiKeyHeader: []
+  - BearerApiKey: []
+tags:
+  - name: Documentation
+  - name: Users
+  - name: Reports
+  - name: SSO
+  - name: Health
+paths:
+  /api/integrations/v1/openapi.yaml:
+    get:
+      tags: [Documentation]
+      summary: Download the OpenAPI contract
+      description: Returns this integrations API contract as YAML for docs tooling and client generation.
+      security: []
+      responses:
+        "200":
+          description: OpenAPI document.
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /api/integrations/v1/ping:
+    get:
+      tags: [Health]
+      summary: Verify API key and resolved tenant scope
+      description: Onboarding smoke check. Returns the resolved connection and tenant identifiers without touching user data.
+      parameters:
+        - $ref: "#/components/parameters/TenantHeader"
+      responses:
+        "200":
+          description: Key valid; scope resolved.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PingResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
+  /api/integrations/v1/users:
+    post:
+      tags: [Users]
+      summary: Create user
+      description: |
+        Creates a platform user linked to your integration via `externalId`.
+        Send an `Idempotency-Key` header to make retries safe: the original
+        response is replayed for 24h. Reusing a key with a different body
+        returns `422 IDEMPOTENCY_KEY_REUSED`; concurrent requests with the same
+        key return `409 IDEMPOTENCY_REQUEST_IN_FLIGHT`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/TenantHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: Created
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: "#/components/schemas/CreateUserResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/IdempotencyReused" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
+    get:
+      tags: [Users]
+      summary: Get user by externalId
+      parameters:
+        - in: query
+          name: externalId
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/TenantHeader"
+        - $ref: "#/components/parameters/TenantQuery"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: "#/components/schemas/User"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
+    patch:
+      tags: [Users]
+      summary: Update user profile (partial)
+      description: Identify the user with `externalId` or `userId`; only provided fields are updated.
+      parameters:
+        - $ref: "#/components/parameters/TenantHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: "#/components/schemas/User"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
+  /api/integrations/v1/users/exists:
+    get:
+      tags: [Users]
+      summary: Check username availability and integration linkage
+      parameters:
+        - in: query
+          name: userName
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/TenantHeader"
+        - $ref: "#/components/parameters/TenantQuery"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserExistsResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
+  /api/integrations/v1/users/status:
+    patch:
+      tags: [Users]
+      summary: Activate or deactivate user
+      parameters:
+        - $ref: "#/components/parameters/TenantHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserStatusRequest"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: "#/components/schemas/UpdateUserStatusResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
+  /api/integrations/v1/reports/completions:
+    get:
+      tags: [Reports]
+      summary: Completions by date range (paginated)
+      description: |
+        Returns completed trainings for users linked to your integration within
+        the resolved organization. Results are ordered by completion time and
+        paginated; follow `pagination.nextCursor` until `hasMore` is false.
+      parameters:
+        - in: query
+          name: from
+          required: true
+          description: "Range start (inclusive). Alias: startDate."
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to
+          required: true
+          description: "Range end (inclusive). Alias: endDate."
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: limit
+          required: false
+          description: Page size (default 200, max 1000).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 200
+        - in: query
+          name: cursor
+          required: false
+          description: Opaque cursor from a previous response's pagination.nextCursor.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/TenantHeader"
+        - $ref: "#/components/parameters/TenantQuery"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompletionsReport"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
+  /api/integrations/v1/sso:
+    get:
+      tags: [SSO]
+      summary: Signed SSO launch (browser redirect)
+      description: |
+        Browser-facing signed launch URL (legacy Topyx-compatible MD5
+        signature). Unlike the REST endpoints, this route does not use API-key
+        auth or the JSON error envelope: failures redirect to the login page
+        with an explanatory message. `organizationTenantId` is required when
+        the integration has multiple active org connections.
+
+        For iframe-native partner launch, send `embed=1` and `embedOrigin`
+        with the partner application's exact origin. TeTS only issues an
+        embeddable player redirect when that origin is approved on the active
+        org connection; otherwise the SSO launch is denied. The redirected
+        player URL includes a short-lived `embedToken` and emits a
+        `tets:course-completed` postMessage to the approved parent origin after
+        the platform runtime commit succeeds.
+      security: []
+      parameters:
+        - in: query
+          name: integration
+          required: false
+          description: Integration slug (legacy alias `partner` also accepted).
+          schema:
+            type: string
+        - in: query
+          name: username
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: timestamp
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: signature
+          required: true
+          description: MD5(secret + username + sessionTimeOut + timestamp), lowercase hex.
+          schema:
+            type: string
+        - in: query
+          name: sessionTimeOut
+          required: true
+          description: Session duration in seconds, max 8 hours.
+          schema:
+            type: string
+        - in: query
+          name: organizationTenantId
+          required: false
+          description: Org root group UUID. Required when multiple org connections are active.
+          schema:
+            type: string
+        - in: query
+          name: identification
+          required: false
+          description: Integrator's stable staff identifier; upserted as the user's externalId.
+          schema:
+            type: string
+        - in: query
+          name: courseId
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: programId
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: embed
+          required: false
+          description: Set to `1` to request iframe-native hosted course launch. Course targets only.
+          schema:
+            type: string
+            enum: ["1"]
+        - in: query
+          name: embedOrigin
+          required: false
+          description: Exact partner page origin allowed to frame the player, for example `https://app.partner.example`.
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect into the platform on success, or to /login with an error message on failure.
+components:
+  securitySchemes:
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: >-
+        Keys may be scoped (users:read, users:write, reports:read) and may expire.
+        An expired key returns 401 UNAUTHORIZED; a key missing the endpoint's scope
+        returns 403 INSUFFICIENT_SCOPE. Legacy admin-issued keys without scopes have
+        full access.
+    BearerApiKey:
+      type: http
+      scheme: bearer
+  parameters:
+    TenantHeader:
+      in: header
+      name: X-Integration-Tenant-Id
+      required: false
+      description: Org root group UUID (organization tenant ID). Required for unscoped keys on multi-org integrations.
+      schema:
+        type: string
+    TenantQuery:
+      in: query
+      name: organizationTenantId
+      required: false
+      description: Query alias for X-Integration-Tenant-Id on GET routes.
+      schema:
+        type: string
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      description: Unique key (max ~255 chars) making retries safe for 24 hours.
+      schema:
+        type: string
+  headers:
+    XRequestId:
+      description: Server-generated request ID; include it in support requests.
+      schema:
+        type: string
+    XRateLimitLimit:
+      description: Request limit for the current window.
+      schema:
+        type: integer
+    XRateLimitRemaining:
+      description: Requests remaining in the current window.
+      schema:
+        type: integer
+    XRateLimitReset:
+      description: Epoch seconds when the current window resets.
+      schema:
+        type: integer
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+  responses:
+    BadRequest:
+      description: Validation or scope-requirement failure.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Invalid or missing API key.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: Connection forbidden/inactive or user out of scope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: User not found for this integration.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Duplicate externalId/email/username, or idempotent request still in flight.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    IdempotencyReused:
+      description: Idempotency-Key reused with a different request body.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+        X-RateLimit-Limit:
+          $ref: "#/components/headers/XRateLimitLimit"
+        X-RateLimit-Remaining:
+          $ref: "#/components/headers/XRateLimitRemaining"
+        X-RateLimit-Reset:
+          $ref: "#/components/headers/XRateLimitReset"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: Unexpected server error; report the requestId.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    FeatureDisabled:
+      description: Integrations API is disabled on this environment.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Error:
+      type: object
+      required: [error, code, requestId]
+      properties:
+        error:
+          type: string
+          description: Human-readable message.
+        code:
+          type: string
+          description: Stable machine-readable error code.
+          enum:
+            - VALIDATION_ERROR
+            - INTEGRATION_CONNECTION_REQUIRED
+            - INTEGRATION_USER_IDENTIFIER_REQUIRED
+            - INTEGRATION_BAD_INPUT
+            - UNAUTHORIZED
+            - INTEGRATION_CONNECTION_FORBIDDEN
+            - INTEGRATION_CONNECTION_INACTIVE
+            - INTEGRATION_USER_OUT_OF_SCOPE
+            - INSUFFICIENT_SCOPE
+            - INTEGRATION_USER_NOT_FOUND
+            - IDEMPOTENCY_REQUEST_IN_FLIGHT
+            - INTEGRATION_EXTERNAL_ID_TAKEN
+            - USER_EMAIL_TAKEN
+            - USERNAME_TAKEN
+            - IDEMPOTENCY_KEY_REUSED
+            - RATE_LIMITED
+            - INTERNAL_ERROR
+            - FEATURE_DISABLED
+        requestId:
+          type: string
+          description: Correlates with TeTS server logs; include in support requests.
+        details:
+          type: array
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+    ErrorDetail:
+      type: object
+      required: [field, message]
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+    PingResponse:
+      type: object
+      required: [ok, integrationSlug, connectionId, connectionLabel, organizationTenantId, orgId, requestId]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        integrationSlug:
+          type: string
+        connectionId:
+          type: string
+        connectionLabel:
+          type: string
+        organizationTenantId:
+          type: string
+          description: Org root group UUID; send as X-Integration-Tenant-Id on scoped requests.
+        orgId:
+          type: string
+        requestId:
+          type: string
+    CreateUserRequest:
+      type: object
+      required: [externalId, userName, firstName, lastName, email]
+      properties:
+        externalId:
+          type: string
+          description: Your stable staff identifier (e.g. staff GUID).
+        userName:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          description: Optional; a strong random password is generated when omitted.
+        organization:
+          type: string
+        groupIds:
+          type: array
+          description: Groups to assign; must all belong to the resolved organization. Defaults to the org root group.
+          items:
+            type: string
+            format: uuid
+    CreateUserResult:
+      type: object
+      required: [userId, externalId, userName, email, status, groupIds]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        externalId:
+          type: string
+        userName:
+          type: string
+        email:
+          type: string
+        status:
+          type: string
+        groupIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    User:
+      type: object
+      required: [userId, externalId, firstName, lastName, status]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        externalId:
+          type: string
+        userName:
+          type: string
+          nullable: true
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          nullable: true
+        status:
+          type: string
+        organization:
+          type: string
+          nullable: true
+        jobTitle:
+          type: string
+          nullable: true
+    UpdateUserRequest:
+      type: object
+      description: Identify with externalId or userId. Only provided fields are updated.
+      properties:
+        externalId:
+          type: string
+        userId:
+          type: string
+          format: uuid
+        userName:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        organization:
+          type: string
+        jobTitle:
+          type: string
+    UserExistsResponse:
+      type: object
+      required: [exists, linkedToIntegration, userName]
+      properties:
+        exists:
+          type: boolean
+        linkedToIntegration:
+          type: boolean
+          description: True only when linked to your integration and in the resolved organization.
+        userName:
+          type: string
+        userId:
+          type: string
+          format: uuid
+          description: Present only when linkedToIntegration is true.
+        externalId:
+          type: string
+          description: Present only when linkedToIntegration is true.
+    UpdateUserStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        externalId:
+          type: string
+        userId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [active, inactive]
+    UpdateUserStatusResult:
+      type: object
+      required: [userId, status]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        externalId:
+          type: string
+        status:
+          type: string
+    Pagination:
+      type: object
+      required: [limit, hasMore, nextCursor]
+      properties:
+        limit:
+          type: integer
+        hasMore:
+          type: boolean
+        nextCursor:
+          type: string
+          nullable: true
+          description: Pass as the cursor query parameter to fetch the next page; null on the last page.
+    CompletionRecord:
+      type: object
+      required: [firstName, lastName, courseName, userId, completedDate]
+      properties:
+        userName:
+          type: string
+          nullable: true
+        firstName:
+          type: string
+        lastName:
+          type: string
+        courseName:
+          type: string
+        courseId:
+          type: integer
+          nullable: true
+          description: Legacy numeric course id when available.
+        userId:
+          type: string
+          format: uuid
+        finalMark:
+          type: number
+          nullable: true
+        externalId:
+          type: string
+          nullable: true
+        identificationNumber:
+          type: string
+          nullable: true
+        organization:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        completedDate:
+          type: string
+          format: date-time
+        dateRegistered:
+          type: string
+          format: date-time
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        code:
+          type: string
+          nullable: true
+          description: Product SKU.
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+    CompletionsReport:
+      type: object
+      required: [from, to, count, completions, pagination]
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        count:
+          type: integer
+          description: Number of completions in this page.
+        completions:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompletionRecord"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
