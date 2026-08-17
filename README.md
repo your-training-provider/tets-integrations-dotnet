@@ -44,12 +44,16 @@ var user = await client.Users.CreateAsync(new CreateUserRequest
     Email = "casey.lee@example.com",
 });
 
-// 4. Poll completions (pagination handled for you)
+// 4. Reconcile your staff roster (auto-paginated; externalId is null for users not yet linked)
+await foreach (var member in client.Users.ListAsync())
+    Console.WriteLine($"{member.UserName}: linked={member.ExternalId is not null}");
+
+// 5. Poll completions (pagination handled for you)
 await foreach (var completion in client.Reports.GetCompletionsAsync(
     DateTime.UtcNow.AddDays(-7), DateTime.UtcNow))
     Console.WriteLine($"{completion.UserName}: {completion.CourseName} @ {completion.CompletedDate}");
 
-// 5. Deactivate a learner who left
+// 6. Deactivate a learner who left
 await client.Users.DeactivateAsync("your-stable-staff-id");
 ```
 
@@ -63,7 +67,7 @@ The fastest way to verify your staging credentials end-to-end is the bundled smo
 dotnet run --project samples/TeTS.SmokeTest
 ```
 
-Run this against your staging credentials as onboarding step one. It exercises `ping`, `users/exists`, user creation, lookup by `externalId`, an SSO launch URL (if configured), completions polling, and deactivation — printing `TetsApiException.RequestId` on any failure so you can hand it straight to TeTS (see [Getting help](#getting-help)). It creates exactly one disposable test user and deactivates it at the end; the API deliberately has no delete endpoint, so deactivation is the cleanup step.
+Run this against your staging credentials as onboarding step one. It exercises `ping`, `users/exists`, user creation, lookup by `externalId`, listing the user roster, an SSO launch URL (if configured), completions polling, and deactivation — printing `TetsApiException.RequestId` on any failure so you can hand it straight to TeTS (see [Getting help](#getting-help)). It creates exactly one disposable test user and deactivates it at the end; the API deliberately has no delete endpoint, so deactivation is the cleanup step.
 
 | Variable | Required | Purpose |
 |---|---|---|
@@ -184,7 +188,7 @@ var exists = await client.Users.CheckExistsAsync("casey.lee",
     organizationTenantId: ping.OrganizationTenantId);
 ```
 
-Every `Users` and `Reports` method takes an optional `organizationTenantId` parameter that overrides `TetsOptions.OrganizationTenantId` for that one call.
+Every `Users` and `Reports` method takes an optional `organizationTenantId` parameter that overrides `TetsOptions.OrganizationTenantId` for that one call (`Users.ListAsync` takes it as `ListUsersOptions.OrganizationTenantId`).
 
 SSO launch URLs need the same scoping: set `SsoLaunchRequest.OrganizationTenantId` when your integration serves multiple organizations.
 
@@ -235,7 +239,7 @@ catch (TetsApiException ex)
 | `InternalError` | Unexpected server error. | **Retried automatically** by the SDK. Report the `RequestId` (see [Getting help](#getting-help)) if it persists. |
 | `FeatureDisabled` | The Integrations API is disabled on this environment. | **Retried automatically** by the SDK (it's a 5xx), but won't succeed until TeTS re-enables it — see [Getting help](#getting-help) if it persists. |
 | `Unknown` | A code this SDK version doesn't recognize yet (forward compatibility). | Treat the HTTP status code as authoritative — the SDK still retries it automatically when the status is 429 or 5xx. |
-| `PaginationStalled` | Client-side only, never sent by the server: `GetCompletionsAsync` aborted because the server returned the same pagination cursor twice in a row. | Not retried — report the `RequestId`, if any, and the date range to TeTS (see [Getting help](#getting-help)). |
+| `PaginationStalled` | Client-side only, never sent by the server: an auto-paginating call (`Reports.GetCompletionsAsync`, `Users.ListAsync`) aborted because the server returned the same pagination cursor twice in a row. | Not retried — report the `RequestId`, if any, and the call parameters to TeTS (see [Getting help](#getting-help)). |
 
 Transport-level failures — no response ever received, e.g. DNS failure, connection refused, or a client-side timeout — surface as `HttpRequestException` or `TaskCanceledException`, not `TetsApiException`, which is reserved for responses the server actually sent.
 

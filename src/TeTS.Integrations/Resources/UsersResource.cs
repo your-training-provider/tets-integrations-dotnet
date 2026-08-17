@@ -1,11 +1,13 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.CompilerServices;
 using TeTS.Integrations.Http;
 using TeTS.Integrations.Models;
 
 namespace TeTS.Integrations.Resources;
 
-/// <summary>User provisioning and lifecycle: create, look up, update, activate/deactivate.</summary>
+/// <summary>User provisioning and lifecycle: create, look up, list, update, activate/deactivate.</summary>
 public sealed class UsersResource
 {
     private const string BasePath = "/api/integrations/v1/users";
@@ -50,6 +52,66 @@ public sealed class UsersResource
             query: new[] { new KeyValuePair<string, string>("externalId", externalId) },
             tenantOverride: organizationTenantId, ct: cancellationToken).ConfigureAwait(false);
         return Unwrap(envelope);
+    }
+
+    /// <summary>
+    /// Streams the roster of users in the resolved organization, following pagination automatically.
+    /// Argument validation (page size range, group id shape) runs eagerly on call — before any
+    /// iteration or HTTP request — rather than being deferred to the first <c>MoveNextAsync</c>,
+    /// matching the other resources' fail-fast contract.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="UserListItem.ExternalId"/> is null for users not yet linked to your integration
+    /// (for example accounts migrated from the legacy platform).
+    /// </remarks>
+    /// <param name="options">Optional group filter, page size, and tenant override; see <see cref="ListUsersOptions"/>.</param>
+    /// <param name="cancellationToken">Token to cancel enumeration.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="ListUsersOptions.PageSize"/> is outside 1..1000.</exception>
+    /// <exception cref="ArgumentException"><see cref="ListUsersOptions.GroupId"/> is set but empty or whitespace.</exception>
+    /// <exception cref="TetsApiException">The server returned an error response, or pagination stalled (see <see cref="TetsErrorCode.PaginationStalled"/>).</exception>
+    public IAsyncEnumerable<UserListItem> ListAsync(ListUsersOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateListOptions(options);
+        return EnumerateUsersAsync(options, cancellationToken);
+    }
+
+    private async IAsyncEnumerable<UserListItem> EnumerateUsersAsync(ListUsersOptions? options,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        string? cursor = null;
+        while (true)
+        {
+            var query = new List<KeyValuePair<string, string>>();
+            if (options?.PageSize is int pageSize)
+                query.Add(new("limit", pageSize.ToString(CultureInfo.InvariantCulture)));
+            if (cursor is not null) query.Add(new("cursor", cursor));
+            if (options?.GroupId is not null) query.Add(new("groupId", options.GroupId));
+
+            var page = await _connection.SendAsync<UserListResponse>(HttpMethod.Get, BasePath + "/list", query,
+                tenantOverride: options?.OrganizationTenantId, ct: cancellationToken).ConfigureAwait(false);
+            foreach (var user in page.Users) yield return user;
+            if (!page.Pagination.HasMore || page.Pagination.NextCursor is null) yield break;
+
+            // Self-DoS guard: a server that reports hasMore=true but echoes back the same cursor we
+            // just used would otherwise drive this loop into an infinite request cycle. Fail loudly
+            // instead of hammering the API forever.
+            if (string.Equals(page.Pagination.NextCursor, cursor, StringComparison.Ordinal))
+                throw new TetsApiException(HttpStatusCode.OK, TetsErrorCode.PaginationStalled,
+                    "SDK check failed: pagination did not advance; the server returned the same cursor twice. Aborting to avoid an infinite request loop.",
+                    requestId: null, details: null, rawBody: null);
+
+            cursor = page.Pagination.NextCursor;
+        }
+    }
+
+    private static void ValidateListOptions(ListUsersOptions? options)
+    {
+        if (options?.PageSize is int pageSize && (pageSize < 1 || pageSize > 1000))
+            throw new ArgumentOutOfRangeException(nameof(options), pageSize,
+                "ListUsersOptions.PageSize must be between 1 and 1000.");
+        if (options?.GroupId is { } groupId && string.IsNullOrWhiteSpace(groupId))
+            throw new ArgumentException("ListUsersOptions.GroupId must not be empty or whitespace when set.", nameof(options));
     }
 
     /// <summary>Partial profile update; only fields set on <paramref name="request"/> are changed.</summary>

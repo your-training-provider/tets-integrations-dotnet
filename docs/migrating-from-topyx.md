@@ -11,6 +11,7 @@ The TeTS Integrations API v1 replaces the old SOAP/manual Topyx integration surf
 | SOAP / manual user provisioning | `client.Users.CreateAsync(...)` (REST) |
 | Signed Topyx SSO URL (MD5) | `client.Sso.BuildLaunchUrl(...)` — same MD5 scheme, new endpoint `/api/integrations/v1/sso` |
 | Completions report export (SOAP/report) | `client.Reports.GetCompletionsAsync(...)` — cursor-paginated REST |
+| Staff roster export (SOAP/report) | `client.Users.ListAsync(...)` — cursor-paginated REST |
 | Username availability checks (manual) | `client.Users.CheckExistsAsync(...)` |
 | Deactivation (manual request) | `client.Users.DeactivateAsync(...)` |
 
@@ -22,6 +23,22 @@ The TeTS Integrations API v1 replaces the old SOAP/manual Topyx integration surf
 - **`identification` now upserts `externalId`.** If you pass `identification`, TeTS links (or creates) the user with that value as their stable `externalId` — the same field `Users.CreateAsync` and `Users.GetByExternalIdAsync` use. Use the same value you'd otherwise pass to `CreateAsync`'s `ExternalId`.
 - **Multi-organization partners** should add `organizationTenantId` to the launch URL (or set `TetsOptions.OrganizationTenantId`) — required once your connection serves more than one organization.
 - **URLs expire.** A signed launch URL is only valid for about 5 minutes from its `timestamp`. Build it at click time; don't cache or email it.
+
+## Syncing your staff roster
+
+`client.Users.ListAsync()` replaces the legacy roster export: it streams every user in your organization, following pagination automatically, so you can reconcile TeTS against your HR system before and after cutover.
+
+```csharp
+await foreach (var user in client.Users.ListAsync())
+{
+    if (user.ExternalId is null)
+    {
+        // Migrated account not yet linked to your integration.
+    }
+}
+```
+
+Rows with `externalId: null` are accounts migrated from the legacy platform that aren't linked to your integration yet. Linking happens automatically the first time such a user launches via SSO with `identification` set (see above) — or TeTS can bulk-link your accounts from a CSV before cutover; ask your onboarding contact. Filter to one group with `ListUsersOptions.GroupId`.
 
 ## Signature compatibility
 

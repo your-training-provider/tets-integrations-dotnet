@@ -245,6 +245,58 @@ paths:
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/FeatureDisabled" }
+  /api/integrations/v1/users/list:
+    get:
+      tags: [Users]
+      summary: List users in the organization (paginated)
+      description: |
+        Returns the roster of users in the resolved organization so integrators
+        can reconcile or bulk-sync staff. `externalId` is your staff identifier
+        for this integration and is null for users not yet linked to it (for
+        example accounts migrated from the legacy platform). Results are
+        keyset-paginated by user id; follow `pagination.nextCursor` until
+        `hasMore` is false.
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          description: Page size (default 200, max 1000).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 200
+        - in: query
+          name: cursor
+          required: false
+          description: Opaque cursor from a previous response's pagination.nextCursor.
+          schema:
+            type: string
+        - in: query
+          name: groupId
+          required: false
+          description: Restrict to members of this group; must belong to the resolved organization.
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/TenantHeader"
+        - $ref: "#/components/parameters/TenantQuery"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
   /api/integrations/v1/reports/completions:
     get:
       tags: [Reports]
@@ -647,6 +699,44 @@ components:
         jobTitle:
           type: string
           nullable: true
+    UserListItem:
+      type: object
+      required: [userId, externalId, firstName, lastName, status, groupIds]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        externalId:
+          type: string
+          nullable: true
+          description: Your staff identifier for this integration; null when the user is not yet linked.
+        userName:
+          type: string
+          nullable: true
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          nullable: true
+        status:
+          type: string
+        groupIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    UserListResponse:
+      type: object
+      required: [users, pagination]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserListItem"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
     UpdateUserRequest:
       type: object
       description: Identify with externalId or userId. Only provided fields are updated.

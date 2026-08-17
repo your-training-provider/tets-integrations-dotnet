@@ -30,6 +30,7 @@ public class ContractParityTests
         "patch /api/integrations/v1/users",
         "get /api/integrations/v1/users/exists",
         "patch /api/integrations/v1/users/status",
+        "get /api/integrations/v1/users/list",
         "get /api/integrations/v1/reports/completions",
         "get /api/integrations/v1/sso",            // browser redirect — covered by SsoUrlBuilder
     };
@@ -44,6 +45,8 @@ public class ContractParityTests
         ["UserExistsResponse"] = typeof(UserExistsResponse),
         ["UpdateUserStatusRequest"] = typeof(UserStatusChangeRequest),
         ["UpdateUserStatusResult"] = typeof(UserStatusResult),
+        ["UserListItem"] = typeof(UserListItem),
+        ["UserListResponse"] = typeof(UserListResponse),   // internal envelope, visible via InternalsVisibleTo
         ["Pagination"] = typeof(Pagination),
         ["CompletionRecord"] = typeof(CompletionRecord),
         ["CompletionsReport"] = typeof(CompletionsReport),
