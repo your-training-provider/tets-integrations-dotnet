@@ -207,6 +207,6 @@ internal sealed class ApiConnection
     {
         var version = typeof(TetsIntegrationsClient).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        return $"TeTS.Integrations/{(string.IsNullOrWhiteSpace(version) ? "1.0.0-beta.1" : version)}";
+        return $"TeTS.Integrations/{(string.IsNullOrWhiteSpace(version) ? "1.0.0-beta.2" : version)}";
     }
 }

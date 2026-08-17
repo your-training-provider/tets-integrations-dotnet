@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0-beta.2 — unreleased
+
+- **BaseUrl now requires https** on both `TetsIntegrationsClient` and `SsoUrlBuilder`; `http` is accepted only for loopback hosts (localhost, 127.0.0.1, ::1) during local development. Plain-http configurations sent the API key in cleartext, so they now throw `ArgumentException` at construction. Breaking only for that misconfigured http usage.
+- **Response buffering caps**: the SDK-owned `HttpClient` now limits response buffering to 32 MiB (injected clients are left to the caller to configure), and `TetsApiException.RawBody` retains at most 64 KiB of an error body, ending with `...[truncated by SDK]` when cut.
+- **Release pipeline hardening**: the NuGet Trusted Publishing login action in the release workflow is now pinned to a full commit SHA instead of a floating tag.
+
 ## 1.0.0-beta.1 — 2026-08-17
 
 Initial release. Official .NET client for the TeTS Integrations API v1, targeting `netstandard2.0` (.NET Framework 4.6.2+), `net6.0` (.NET 6/7), and `net8.0`.
