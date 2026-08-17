@@ -53,7 +53,13 @@ public sealed class TetsIntegrationsClient : IDisposable
     private static HttpClient CreateOwnedClient(TetsOptions options)
     {
         ValidateOptions(options);
-        return new HttpClient { Timeout = options.Timeout };
+        return new HttpClient
+        {
+            Timeout = options.Timeout,
+            // Bound how much response the SDK-owned client will buffer, so a misbehaving server
+            // can't exhaust caller memory. Injected HttpClients are the caller's to configure.
+            MaxResponseContentBufferSize = 32 * 1024 * 1024,
+        };
     }
 
     /// <summary>
@@ -110,6 +116,11 @@ public sealed class TetsIntegrationsClient : IDisposable
         if (!Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var baseUri)
             || (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
             throw new ArgumentException("TetsOptions.BaseUrl must be an absolute http or https URL.", nameof(options));
+        // http would send the API key in cleartext; allow it only for loopback hosts
+        // (localhost, 127.0.0.1, ::1) so local development still works.
+        if (baseUri.Scheme == Uri.UriSchemeHttp && !baseUri.IsLoopback)
+            throw new ArgumentException(
+                "TetsOptions.BaseUrl must use https; http is allowed only for localhost development.", nameof(options));
         if (string.IsNullOrWhiteSpace(options.ApiKey))
             throw new ArgumentException("TetsOptions.ApiKey is required.", nameof(options));
         if (options.Timeout <= TimeSpan.Zero)

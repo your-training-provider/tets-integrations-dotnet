@@ -17,7 +17,8 @@ public sealed class TetsApiException : Exception
     public string? RequestId { get; }
     /// <summary>Field-level validation problems, if the server supplied any; empty otherwise.</summary>
     public IReadOnlyList<ErrorDetail> Details { get; }
-    /// <summary>The raw response body, for debugging.</summary>
+    /// <summary>The raw response body, for debugging. Bodies larger than 64 KiB are truncated,
+    /// ending with <c>...[truncated by SDK]</c>.</summary>
     public string? RawBody { get; }
 
     /// <summary>

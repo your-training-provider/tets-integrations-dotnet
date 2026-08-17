@@ -3,7 +3,9 @@ namespace TeTS.Integrations;
 /// <summary>Configuration for <see cref="TetsIntegrationsClient"/>.</summary>
 public sealed class TetsOptions
 {
-    /// <summary>Platform base URL, e.g. https://courses.example.com (no trailing slash needed).</summary>
+    /// <summary>Platform base URL, e.g. https://courses.example.com (no trailing slash needed).
+    /// Must use https — the API key would travel in cleartext otherwise; http is accepted only for
+    /// loopback hosts (localhost, 127.0.0.1, ::1) during local development.</summary>
     public string BaseUrl { get; set; } = "";
     /// <summary>API key issued by TeTS; sent as the x-api-key header on every request.</summary>
     public string ApiKey { get; set; } = "";

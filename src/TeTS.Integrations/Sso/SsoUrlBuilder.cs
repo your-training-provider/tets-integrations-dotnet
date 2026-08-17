@@ -12,16 +12,21 @@ public sealed class SsoUrlBuilder
     private readonly string _secret;
 
     /// <summary>Constructs a builder bound to one integration's base URL, slug, and SSO secret.</summary>
-    /// <param name="baseUrl">Absolute http or https origin of the platform, no path/query/fragment, e.g. https://courses.example.com.</param>
+    /// <param name="baseUrl">Absolute https origin of the platform, no path/query/fragment, e.g. https://courses.example.com. http is accepted only for loopback hosts (localhost, 127.0.0.1, ::1) during local development.</param>
     /// <param name="integrationSlug">Your integration's slug, sent as the <c>integration</c> query parameter.</param>
     /// <param name="ssoSecret">Your integration's SSO signing secret. ASCII only; never echoed in exception messages.</param>
-    /// <exception cref="ArgumentException"><paramref name="baseUrl"/> is missing, not an absolute http/https URL, or contains a query/fragment; or <paramref name="integrationSlug"/> or <paramref name="ssoSecret"/> is missing or non-ASCII.</exception>
+    /// <exception cref="ArgumentException"><paramref name="baseUrl"/> is missing, not an absolute https (or loopback http) URL, or contains a query/fragment; or <paramref name="integrationSlug"/> or <paramref name="ssoSecret"/> is missing or non-ASCII.</exception>
     public SsoUrlBuilder(string baseUrl, string integrationSlug, string ssoSecret)
     {
         if (string.IsNullOrWhiteSpace(baseUrl)) throw new ArgumentException("baseUrl is required.", nameof(baseUrl));
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri)
             || (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
             throw new ArgumentException("baseUrl must be an absolute http or https URL.", nameof(baseUrl));
+        // http would send the signed launch URL (and the learner's session) in cleartext; allow it
+        // only for loopback hosts (localhost, 127.0.0.1, ::1) so local development still works.
+        if (baseUri.Scheme == Uri.UriSchemeHttp && !baseUri.IsLoopback)
+            throw new ArgumentException(
+                "baseUrl must use https; http is allowed only for localhost development.", nameof(baseUrl));
         if (!string.IsNullOrEmpty(baseUri.Query) || !string.IsNullOrEmpty(baseUri.Fragment))
             throw new ArgumentException("baseUrl must not contain a query string or fragment.", nameof(baseUrl));
         if (string.IsNullOrWhiteSpace(integrationSlug)) throw new ArgumentException("integrationSlug is required.", nameof(integrationSlug));

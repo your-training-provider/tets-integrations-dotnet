@@ -113,7 +113,7 @@ public class MyService
 }
 ```
 
-With this constructor the SDK never touches the injected `HttpClient`'s `Timeout`, and disposing the `TetsIntegrationsClient` does not dispose the injected `HttpClient` — you own its lifetime, as `IHttpClientFactory` expects.
+With this constructor the SDK never touches the injected `HttpClient`'s `Timeout`, and disposing the `TetsIntegrationsClient` does not dispose the injected `HttpClient` — you own its lifetime, as `IHttpClientFactory` expects. The same applies to response buffering: the SDK caps its own client's `MaxResponseContentBufferSize` at 32 MiB, but an injected client's buffering limits are yours to configure.
 
 ## SSO launch
 

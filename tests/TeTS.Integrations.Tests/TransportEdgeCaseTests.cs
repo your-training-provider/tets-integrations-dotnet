@@ -7,8 +7,8 @@ using Xunit;
 
 namespace TeTS.Integrations.Tests;
 
-/// <summary>Edge-case coverage from the Task 3 hardening pass: safe 2xx body handling, clamped
-/// typed Retry-After, IDisposable ownership, read-only JSON options, and the small fixes alongside them.</summary>
+/// <summary>Transport edge cases: empty and non-JSON response bodies, Retry-After handling
+/// (typed parsing and clamping), HttpClient disposal ownership, and shared serializer immutability.</summary>
 public class TransportEdgeCaseTests
 {
     private const string PingBody = """
@@ -25,7 +25,7 @@ public class TransportEdgeCaseTests
         return (new TetsIntegrationsClient(new HttpClient(handler), options), handler);
     }
 
-    // ---- C1: safe 2xx body handling --------------------------------------------
+    // ---- Safe 2xx body handling: empty or non-JSON success bodies ---------------
 
     [Fact]
     public async Task SuccessResponse_EmptyBody_ThrowsTetsApiException_NotJsonException()
@@ -48,7 +48,7 @@ public class TransportEdgeCaseTests
         Assert.IsType<JsonException>(ex.InnerException);
     }
 
-    // ---- C2 + I1: typed, clamped Retry-After -----------------------------------
+    // ---- Typed, clamped Retry-After handling ------------------------------------
 
     [Fact]
     public async Task RetryAfterNegative_IsRejectedByParser_FallsBackToBackoff()
@@ -100,7 +100,7 @@ public class TransportEdgeCaseTests
         Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), clamped);
     }
 
-    // ---- I2: IDisposable ownership ----------------------------------------------
+    // ---- HttpClient disposal ownership -------------------------------------------
 
     [Fact]
     public async Task Dispose_WithInjectedHttpClient_DoesNotDisposeIt()
@@ -118,7 +118,7 @@ public class TransportEdgeCaseTests
         Assert.True(ping.Ok);
     }
 
-    // ---- I3: read-only shared JSON options ---------------------------------------
+    // ---- Read-only shared JSON serializer options ---------------------------------
 
     [Fact]
     public void TetsJsonOptions_IsReadOnly()
@@ -126,7 +126,7 @@ public class TransportEdgeCaseTests
         Assert.True(TetsJson.Options.IsReadOnly);
     }
 
-    // ---- Minor: status-code fallback for unparseable 429 -------------------------
+    // ---- Status-code fallback for unparseable 429 ---------------------------------
 
     [Fact]
     public async Task RateLimitStatus_WithUnparseableBody_MapsToRateLimited()
@@ -137,7 +137,7 @@ public class TransportEdgeCaseTests
         Assert.Equal(TetsErrorCode.RateLimited, ex.Code);
     }
 
-    // ---- Minor: BaseUrl must be an absolute http/https URI -----------------------
+    // ---- BaseUrl validation: absolute URI, https except loopback ------------------
 
     [Fact]
     public void InvalidBaseUrl_ThrowsOnConstruction()
@@ -147,7 +147,48 @@ public class TransportEdgeCaseTests
         Assert.Contains("BaseUrl", ex.Message);
     }
 
-    // ---- Minor: default Accept / User-Agent headers -------------------------------
+    [Theory]
+    [InlineData("https://api.example.com")]
+    [InlineData("http://localhost:3000")]
+    [InlineData("http://127.0.0.1:3000")]
+    [InlineData("http://[::1]:3000")]
+    public void HttpsOrLoopbackHttpBaseUrl_IsAccepted(string baseUrl)
+    {
+        using var client = new TetsIntegrationsClient(new TetsOptions { BaseUrl = baseUrl, ApiKey = "k" });
+    }
+
+    [Fact]
+    public void HttpBaseUrlWithNonLoopbackHost_ThrowsOnConstruction()
+    {
+        var ex = Assert.Throws<ArgumentException>(() =>
+            new TetsIntegrationsClient(new TetsOptions { BaseUrl = "http://api.example.com", ApiKey = "k" }));
+        Assert.Contains("BaseUrl must use https; http is allowed only for localhost development", ex.Message);
+    }
+
+    // ---- RawBody retention cap on TetsApiException --------------------------------
+
+    [Fact]
+    public async Task ErrorBodyLargerThan64KiB_RawBodyIsTruncatedWithMarker()
+    {
+        var (client, handler) = Make(o => o.MaxRetries = 0);
+        var huge = new string('x', 100_000);
+        handler.Enqueue(HttpStatusCode.BadRequest, huge);
+        var ex = await Assert.ThrowsAsync<TetsApiException>(() => client.PingAsync());
+        Assert.EndsWith("\n...[truncated by SDK]", ex.RawBody);
+        Assert.Equal(64 * 1024 + "\n...[truncated by SDK]".Length, ex.RawBody!.Length);
+    }
+
+    [Fact]
+    public async Task SmallErrorBody_RawBodyIsRetainedUnchanged()
+    {
+        var (client, handler) = Make(o => o.MaxRetries = 0);
+        const string body = """{"error":"nope","code":"VALIDATION_FAILED"}""";
+        handler.Enqueue(HttpStatusCode.BadRequest, body);
+        var ex = await Assert.ThrowsAsync<TetsApiException>(() => client.PingAsync());
+        Assert.Equal(body, ex.RawBody);
+    }
+
+    // ---- Default Accept / User-Agent headers --------------------------------------
 
     [Fact]
     public async Task Requests_CarryAcceptAndUserAgentHeaders()

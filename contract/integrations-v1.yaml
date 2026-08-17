@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     REST API for integrator user provisioning, profile updates, completions
-    reporting, and SSO launch.
+    reporting, catalog export, and SSO launch.
 
     ## Authentication
     Authenticate every request with an API key issued by TeTS, sent either as

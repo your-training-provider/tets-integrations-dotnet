@@ -91,18 +91,18 @@ internal sealed class ApiConnection
                 {
                     if (string.IsNullOrWhiteSpace(raw))
                         throw new TetsApiException(response.StatusCode, TetsErrorCode.Unknown,
-                            "Empty response body.", HeaderRequestId(response), null, raw);
+                            "Empty response body.", HeaderRequestId(response), null, TruncateRawBody(raw));
 
                     try
                     {
                         return JsonSerializer.Deserialize<T>(raw, TetsJson.Options)
                                ?? throw new TetsApiException(response.StatusCode, TetsErrorCode.Unknown,
-                                    "Empty response body.", HeaderRequestId(response), null, raw);
+                                    "Empty response body.", HeaderRequestId(response), null, TruncateRawBody(raw));
                     }
                     catch (JsonException jx)
                     {
                         throw new TetsApiException(response.StatusCode, TetsErrorCode.Unknown,
-                            "Response body was not valid JSON.", HeaderRequestId(response), null, raw, jx);
+                            "Response body was not valid JSON.", HeaderRequestId(response), null, TruncateRawBody(raw), jx);
                     }
                 }
 
@@ -122,7 +122,7 @@ internal sealed class ApiConnection
 
                 throw new TetsApiException(response.StatusCode, code,
                     envelope?.Error ?? $"Request failed with HTTP {(int)response.StatusCode}.",
-                    envelope?.RequestId ?? HeaderRequestId(response), envelope?.Details, raw);
+                    envelope?.RequestId ?? HeaderRequestId(response), envelope?.Details, TruncateRawBody(raw));
             }
         }
     }
@@ -162,6 +162,17 @@ internal sealed class ApiConnection
     {
         var seconds = Math.Max(0, Math.Min(60, delta.TotalSeconds));
         return TimeSpan.FromSeconds(seconds);
+    }
+
+    /// <summary>
+    /// Caps what <see cref="TetsApiException.RawBody"/> retains at 64 KiB, so a huge error body
+    /// isn't kept alive for the lifetime of the exception (logs, exception trackers). Parsing
+    /// always runs on the full body; only the stored copy is truncated.
+    /// </summary>
+    internal static string TruncateRawBody(string raw)
+    {
+        const int maxChars = 64 * 1024;
+        return raw.Length <= maxChars ? raw : raw.Substring(0, maxChars) + "\n...[truncated by SDK]";
     }
 
     private static string? HeaderRequestId(HttpResponseMessage response)

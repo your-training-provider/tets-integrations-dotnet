@@ -7,7 +7,7 @@ namespace TeTS.Integrations.Tests;
 
 public class SsoTests
 {
-    // Vectors generated from lib/auth/integrationSso.ts (Unified-App) on 2026-08-14.
+    // Vectors generated from the platform's server-side SSO implementation on 2026-08-14.
     [Theory]
     [InlineData("test-secret", "casey.lee", "28800", "1783332000", "63d7f0a4afedbc795496be859a186c9f")]
     [InlineData("partner-staging-secret", "user with spaces", "28800", "1786500000", "cc00ef52963116b1e2aefb17ce0684ff")]
@@ -55,6 +55,23 @@ public class SsoTests
     {
         var ex = Assert.Throws<ArgumentException>(() => new SsoUrlBuilder(baseUrl, "acme", "secret"));
         Assert.Equal("baseUrl", ex.ParamName);
+    }
+
+    [Theory]
+    [InlineData("https://courses.example.com")]
+    [InlineData("http://localhost:3000")]
+    [InlineData("http://127.0.0.1:3000")]
+    [InlineData("http://[::1]:3000")]
+    public void Constructor_HttpsOrLoopbackHttpBaseUrl_IsAccepted(string baseUrl)
+        => _ = new SsoUrlBuilder(baseUrl, "acme", "secret");
+
+    [Fact]
+    public void Constructor_HttpBaseUrlWithNonLoopbackHost_ThrowsNamingBaseUrl()
+    {
+        var ex = Assert.Throws<ArgumentException>(() =>
+            new SsoUrlBuilder("http://courses.example.com", "acme", "secret"));
+        Assert.Equal("baseUrl", ex.ParamName);
+        Assert.Contains("baseUrl must use https; http is allowed only for localhost development", ex.Message);
     }
 
     [Fact]
