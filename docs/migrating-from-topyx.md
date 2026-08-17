@@ -24,6 +24,24 @@ The TeTS Integrations API v1 replaces the old SOAP/manual Topyx integration surf
 - **Multi-organization partners** should add `organizationTenantId` to the launch URL (or set `TetsOptions.OrganizationTenantId`) — required once your connection serves more than one organization.
 - **URLs expire.** A signed launch URL is only valid for about 5 minutes from its `timestamp`. Build it at click time; don't cache or email it.
 
+## Your identifiers carry over
+
+The identifier you already track per staff member is the identifier TeTS uses. `externalId` is your stable staff ID — the same value your Topyx-era integration stored per user (many partners kept it in a Topyx custom field). You choose it, you keep it, TeTS never rewrites it. It appears as `ExternalId` on REST calls and `identification` on SSO launch URLs.
+
+TeTS user and group ids are UUIDs, but you don't migrate anything to them and never need to persist them — every user-facing SDK call identifies users by *your* `externalId`. For accounts migrated from the legacy platform, the link between your ID and the TeTS account is established automatically the first time that user launches via SSO with `identification` set, or TeTS can bulk-link a whole organization from a CSV of `externalId, username-or-email` pairs before cutover — ask your onboarding contact. [Syncing your staff roster](#syncing-your-staff-roster) shows you which accounts are linked at any time.
+
+## From legacy group IDs to organization tenants
+
+If your per-customer configuration keys on legacy group IDs, the replacement is one config entry per customer, not a data migration:
+
+| Legacy per-customer config | TeTS replacement |
+|---|---|
+| Group ID on every call | Nothing — the customer's API key is scoped to their organization and resolves it on every REST call |
+| — | API key, issued per customer connection |
+| — | `organizationTenantId`: one static UUID per customer, needed only on SSO launch URLs when your integration slug serves multiple organizations (and available for REST scoping if you ever share one key across organizations) |
+
+TeTS provides a mapping table (legacy group ID → customer → tenant ID) at onboarding, so populating the config is a lookup. Each entry is self-verifying: call `client.PingAsync()` with the customer's key and it echoes the resolved `OrganizationTenantId` and connection label.
+
 ## Syncing your staff roster
 
 `client.Users.ListAsync()` replaces the legacy roster export: it streams every user in your organization, following pagination automatically, so you can reconcile TeTS against your HR system before and after cutover.

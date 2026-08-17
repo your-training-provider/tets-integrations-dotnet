@@ -8,7 +8,7 @@ Official .NET client for the TeTS Integrations API v1: user provisioning, comple
 dotnet add package TeTS.Integrations
 ```
 
-Targets .NET Framework 4.6.2+ and .NET Standard 2.0 (via `netstandard2.0`), .NET 6 and .NET 7 (via `net6.0`), and .NET 8+ (via `net8.0`).
+Targets .NET Framework 4.6.2+ and .NET Standard 2.0 (via `netstandard2.0`), .NET 6 and .NET 7 (via `net6.0`), and .NET 8+ (via `net8.0`). CI runs the full test suite on both the .NET 6 and .NET 8 runtimes.
 
 Migrating from a legacy Topyx integration? Start with [docs/migrating-from-topyx.md](https://github.com/your-training-provider/tets-integrations-dotnet/blob/main/docs/migrating-from-topyx.md).
 
@@ -171,7 +171,7 @@ On Windows hosts running .NET Framework with the FIPS security policy enforced, 
 
 ## Multi-organization tenants
 
-If your integration serves more than one organization, requests need to know which one to scope to. Two ways to set it:
+Most partners never send a tenant ID at all: an API key is scoped to one organization's connection, and the key alone resolves that organization on every REST call. Tenant scoping only enters the picture when a single integration serves more than one organization — then requests need to know which one to scope to. Two ways to set it:
 
 ```csharp
 // Once, from the connection TeTS provisioned for you (PingAsync reports the resolved tenant):
