@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0-beta.1 — unreleased
+## 1.0.0-beta.1 — 2026-08-17
 
 Initial release. Official .NET client for the TeTS Integrations API v1, targeting `netstandard2.0` (.NET Framework 4.6.2+), `net6.0` (.NET 6/7), and `net8.0`.
 
