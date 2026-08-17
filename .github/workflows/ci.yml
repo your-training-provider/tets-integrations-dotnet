@@ -12,7 +12,11 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "8.0.x"
+          # .NET 6 runtime so `dotnet test` executes the net6.0 target on a real net6 runtime;
+          # .NET 8 SDK drives the build and runs the net8.0 target.
+          dotnet-version: |
+            6.0.x
+            8.0.x
       - run: dotnet build --configuration Release
       - run: dotnet test --configuration Release --no-build
         env:

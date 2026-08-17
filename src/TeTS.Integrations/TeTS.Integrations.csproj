@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net6.0;net8.0</TargetFrameworks>
     <PackageId>TeTS.Integrations</PackageId>
     <Version>1.0.0-beta.1</Version>
     <Description>Official .NET client for the TeTS Integrations API v1: user provisioning, completion reports, and signed SSO launch URLs for integration partners.</Description>
@@ -23,6 +23,12 @@
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+  <!-- net6.0 ships System.Text.Json 6.x inbox; the SDK uses STJ 7/8 APIs
+       (JsonSerializerOptions.MakeReadOnly, DefaultJsonTypeInfoResolver), so pull in 8.0.5.
+       IAsyncEnumerable is inbox on net6.0, so no Microsoft.Bcl.AsyncInterfaces here. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net6.0'">
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 </Project>

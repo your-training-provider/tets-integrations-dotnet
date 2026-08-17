@@ -19,7 +19,11 @@ jobs:
           fi
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "8.0.x"
+          # .NET 6 runtime so the pre-pack `dotnet test` executes the net6.0 target on a real
+          # net6 runtime; .NET 8 SDK builds and packs all target frameworks.
+          dotnet-version: |
+            6.0.x
+            8.0.x
       - run: dotnet build --configuration Release /p:ContinuousIntegrationBuild=true
       - run: dotnet test --configuration Release --no-build
         env:

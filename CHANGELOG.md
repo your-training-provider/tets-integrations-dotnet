@@ -2,7 +2,9 @@
 
 ## 1.0.0-beta.1 — unreleased
 
-Initial release. Official .NET client for the TeTS Integrations API v1, targeting `netstandard2.0` (.NET Framework 4.6.2+) and `net8.0`.
+Initial release. Official .NET client for the TeTS Integrations API v1, targeting `netstandard2.0` (.NET Framework 4.6.2+), `net6.0` (.NET 6/7), and `net8.0`.
+
+- **Targets**: added a first-class `net6.0` target — .NET 6/7 consumers no longer pull the `Microsoft.Bcl.AsyncInterfaces` shim into their dependency closure; the full test suite runs on both the .NET 6 and .NET 8 runtimes in CI.
 
 - **Client**: `TetsIntegrationsClient` (`IDisposable`) over `HttpClient`, usable standalone or via DI/`IHttpClientFactory`. Automatic retries with exponential backoff and jitter on `429`/`5xx`/transport failures and `409 IdempotencyRequestInFlight`, honoring `Retry-After` (clamped to 60s). Errors surface as `TetsApiException` with a stable `TetsErrorCode`, `RequestId`, and raw body for support requests. `LastRateLimit` exposes the most recent rate-limit snapshot.
 - **Users**: `CreateAsync` (idempotency-key-safe), `GetByExternalIdAsync`, `UpdateAsync` (partial update), `CheckExistsAsync`, `ActivateAsync`/`DeactivateAsync`.

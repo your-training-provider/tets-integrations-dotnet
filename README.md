@@ -8,7 +8,7 @@ Official .NET client for the TeTS Integrations API v1: user provisioning, comple
 dotnet add package TeTS.Integrations
 ```
 
-Targets .NET Framework 4.6.2+ (via `netstandard2.0`) and .NET 8+.
+Targets .NET Framework 4.6.2+ and .NET Standard 2.0 (via `netstandard2.0`), .NET 6 and .NET 7 (via `net6.0`), and .NET 8+ (via `net8.0`).
 
 Migrating from a legacy Topyx integration? Start with [docs/migrating-from-topyx.md](https://github.com/your-training-provider/tets-integrations-dotnet/blob/main/docs/migrating-from-topyx.md).
 
