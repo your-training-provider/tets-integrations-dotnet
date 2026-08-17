@@ -75,8 +75,23 @@ await Step("5. list users (first page)", async () =>
         : $"saw {seen} user(s); first: userName={first.UserName ?? "(null)"} externalId={(first.ExternalId is null ? "null (not yet linked)" : "set")}";
 });
 
-// 6. SSO launch URL (printed for manual browser verification)
-await Step("6. SSO launch URL", () =>
+// 6. catalog (first page of the training pool; stop after 25 — call shape is the test)
+await Step("6. catalog (first page)", async () =>
+{
+    var seen = 0;
+    CatalogItem? first = null;
+    await foreach (var item in client.Catalog.ListAsync())
+    {
+        first ??= item;
+        if (++seen >= 25) break;
+    }
+    return first is null
+        ? "0 catalog rows visible to this connection"
+        : $"saw {seen} item(s); first: title={first.Title} legacyCourseId={first.LegacyCourseId?.ToString() ?? "(null)"}";
+});
+
+// 7. SSO launch URL (printed for manual browser verification)
+await Step("7. SSO launch URL", () =>
 {
     if (Env("TETS_SSO_SECRET") is null || Env("TETS_INTEGRATION_SLUG") is null)
         return Task.FromResult("SKIPPED (set TETS_SSO_SECRET and TETS_INTEGRATION_SLUG to enable)");
@@ -88,8 +103,8 @@ await Step("6. SSO launch URL", () =>
     return Task.FromResult($"open in a browser to verify:\n   {url}");
 });
 
-// 7. completions polling (last 30 days; the fresh smoke user has none — call shape is the test)
-await Step("7. completions report", async () =>
+// 8. completions polling (last 30 days; the fresh smoke user has none — call shape is the test)
+await Step("8. completions report", async () =>
 {
     var count = 0;
     await foreach (var _ in client.Reports.GetCompletionsAsync(DateTime.UtcNow.AddDays(-30), DateTime.UtcNow))
@@ -97,8 +112,8 @@ await Step("7. completions report", async () =>
     return $"{count} completion(s) in the last 30 days (pagination followed automatically)";
 });
 
-// 8. deactivate the smoke user
-await Step("8. deactivate user", async () =>
+// 9. deactivate the smoke user
+await Step("9. deactivate user", async () =>
 {
     var result = await client.Users.DeactivateAsync(externalId);
     return $"status={result.Status}";

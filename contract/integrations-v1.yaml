@@ -38,6 +38,7 @@ tags:
   - name: Documentation
   - name: Users
   - name: Reports
+  - name: Catalog
   - name: SSO
   - name: Health
 paths:
@@ -347,6 +348,55 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CompletionsReport"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
+  /api/integrations/v1/catalog:
+    get:
+      tags: [Catalog]
+      summary: Training catalog export (paginated)
+      description: |
+        Lists the resolved organization's training pool, so you can map course
+        identifiers for SSO deep links and interpret completion reports.
+        `legacyCourseId` is the id the completions report emits as `courseId`
+        and SSO accepts as `courseId`/`cid`; programs deep-link via the SSO
+        `programId` parameter using `legacyProgramId`. Duplicate titles can
+        appear (legacy twin editions) — completions report whichever twin the
+        learner actually completed. `renewOnly: true` marks superseded
+        editions kept for interpreting historical completions and renewals —
+        do not deep-link them for NEW assignments. Rows are ordered by
+        `productId`; follow `pagination.nextCursor` until `hasMore` is false.
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          description: Page size (default 200, max 1000).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 200
+        - in: query
+          name: cursor
+          required: false
+          description: Opaque cursor from a previous response's pagination.nextCursor.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/TenantHeader"
+        - $ref: "#/components/parameters/TenantQuery"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogListResponse"
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -882,5 +932,79 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CompletionRecord"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+    CatalogProgramCourse:
+      type: object
+      required: [productId, sortOrder, isRequired]
+      properties:
+        productId:
+          type: string
+          format: uuid
+          description: Product id of the child course; also a catalog row.
+        sortOrder:
+          type: integer
+        isRequired:
+          type: boolean
+          description: False = elective pool member.
+    CatalogItem:
+      type: object
+      required: [productId, productType, title, categoryNames, updatedAt, renewOnly]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        productType:
+          type: string
+          enum: [course, program, class]
+        title:
+          type: string
+        code:
+          type: string
+          nullable: true
+          description: Product SKU.
+        categoryNames:
+          type: array
+          items:
+            type: string
+        certValidityDays:
+          type: integer
+          nullable: true
+          description: Days a completion's certificate stays valid. Null = no expiry.
+        updatedAt:
+          type: string
+          format: date-time
+        legacyCourseId:
+          type: integer
+          nullable: true
+          description: >-
+            Legacy numeric course id — the id the completions report emits as
+            `courseId` and SSO accepts as `courseId`/`cid`.
+        legacyProgramId:
+          type: integer
+          nullable: true
+          description: >-
+            Legacy numeric program id — programs deep-link via the SSO
+            `programId` parameter.
+        renewOnly:
+          type: boolean
+          description: >-
+            True when this organization superseded the edition via a renewal
+            redirect. The row is kept for interpreting historical
+            completions/renewals; do not deep-link it for new assignments.
+        programCourses:
+          type: array
+          nullable: true
+          description: Child courses for programs; null for non-program products.
+          items:
+            $ref: "#/components/schemas/CatalogProgramCourse"
+    CatalogListResponse:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogItem"
         pagination:
           $ref: "#/components/schemas/Pagination"

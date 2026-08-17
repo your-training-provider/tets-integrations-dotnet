@@ -46,6 +46,7 @@ public sealed class TetsIntegrationsClient : IDisposable
         _connection = new ApiConnection(httpClient, options, info => LastRateLimit = info);
         Users = new UsersResource(_connection);
         Reports = new ReportsResource(_connection);
+        Catalog = new CatalogResource(_connection);
     }
 
     /// <summary>Validates before allocating, so invalid options never leave an undisposed HttpClient behind.</summary>
@@ -76,6 +77,9 @@ public sealed class TetsIntegrationsClient : IDisposable
 
     /// <summary>Completion reporting.</summary>
     public ReportsResource Reports { get; }
+
+    /// <summary>Training catalog export.</summary>
+    public CatalogResource Catalog { get; }
 
     /// <summary>
     /// Signed SSO launch URL builder. Requires <see cref="TetsOptions.IntegrationSlug"/> and

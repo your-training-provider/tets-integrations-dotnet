@@ -12,6 +12,7 @@ The TeTS Integrations API v1 replaces the old SOAP/manual Topyx integration surf
 | Signed Topyx SSO URL (MD5) | `client.Sso.BuildLaunchUrl(...)` — same MD5 scheme, new endpoint `/api/integrations/v1/sso` |
 | Completions report export (SOAP/report) | `client.Reports.GetCompletionsAsync(...)` — cursor-paginated REST |
 | Staff roster export (SOAP/report) | `client.Users.ListAsync(...)` — cursor-paginated REST |
+| Catalog export (SOAP/report) | `client.Catalog.ListAsync(...)` — cursor-paginated REST |
 | Username availability checks (manual) | `client.Users.CheckExistsAsync(...)` |
 | Deactivation (manual request) | `client.Users.DeactivateAsync(...)` |
 
@@ -58,6 +59,10 @@ await foreach (var user in client.Users.ListAsync())
 
 Rows with `externalId: null` are accounts migrated from the legacy platform that aren't linked to your integration yet. Linking happens automatically the first time such a user launches via SSO with `identification` set (see above) — or TeTS can bulk-link your accounts from a CSV before cutover; ask your onboarding contact. Filter to one group with `ListUsersOptions.GroupId`.
 
+## Mapping your course catalog
+
+`client.Catalog.ListAsync()` replaces the legacy catalog export: it streams the organization's training pool, following pagination automatically. Each row carries both the platform `ProductId` and your legacy numeric ids — `LegacyCourseId` is the id the completions report emits as `courseId` and SSO accepts as `courseId`/`cid`, and `LegacyProgramId` is what the SSO `programId` parameter takes for program deep links — so completions interpretation and SSO launch round-trip without a separate mapping table. Rows with `RenewOnly = true` are superseded editions the organization replaced via a renewal redirect, kept so historical completions and renewals stay interpretable; don't deep-link them for new assignments. For programs, `ProgramCourses` lists the child courses in order (it is `null` on non-program rows).
+
 ## Signature compatibility
 
 Your existing MD5 signer keeps working — the wire format is byte-for-byte the same as Topyx's. If you want to verify your signer against the SDK's implementation (or you're not ready to adopt the SDK for signing yet and just want a reference), use the static helper:
@@ -78,7 +83,6 @@ All signed inputs must be ASCII — the SDK throws rather than guessing at a los
 These Topyx-era capabilities don't have a v1 REST equivalent yet. Ask TeTS about timelines if your integration depends on one:
 
 - Manager/supervisor provisioning via API (learner provisioning only, for now)
-- Catalog export
 - Certificate download
 - Self-service API key rotation
 - Push webhooks — completions and status changes are polling-only via `Reports.GetCompletionsAsync`

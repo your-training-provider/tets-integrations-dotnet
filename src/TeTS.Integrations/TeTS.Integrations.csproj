@@ -3,7 +3,7 @@
     <TargetFrameworks>netstandard2.0;net6.0;net8.0</TargetFrameworks>
     <PackageId>TeTS.Integrations</PackageId>
     <Version>1.0.0-beta.1</Version>
-    <Description>Official .NET client for the TeTS Integrations API v1: user provisioning, completion reports, and signed SSO launch URLs for integration partners.</Description>
+    <Description>Official .NET client for the TeTS Integrations API v1: user provisioning, completion reports, training catalog export, and signed SSO launch URLs for integration partners.</Description>
     <PackageTags>tets;lms;integrations;sso</PackageTags>
     <PackageProjectUrl>https://github.com/your-training-provider/tets-integrations-dotnet</PackageProjectUrl>
     <Copyright>Copyright (c) 2026 Training and eTracking Solutions</Copyright>

@@ -32,6 +32,7 @@ public class ContractParityTests
         "patch /api/integrations/v1/users/status",
         "get /api/integrations/v1/users/list",
         "get /api/integrations/v1/reports/completions",
+        "get /api/integrations/v1/catalog",
         "get /api/integrations/v1/sso",            // browser redirect — covered by SsoUrlBuilder
     };
 
@@ -50,6 +51,9 @@ public class ContractParityTests
         ["Pagination"] = typeof(Pagination),
         ["CompletionRecord"] = typeof(CompletionRecord),
         ["CompletionsReport"] = typeof(CompletionsReport),
+        ["CatalogProgramCourse"] = typeof(CatalogProgramCourse),
+        ["CatalogItem"] = typeof(CatalogItem),
+        ["CatalogListResponse"] = typeof(CatalogListResponse),   // internal envelope, visible via InternalsVisibleTo
         ["ErrorDetail"] = typeof(ErrorDetail),
         // Error: consumed internally, surfaced via TetsApiException — checked by name below
     };
