@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0-beta.2 — unreleased
+## 1.0.0-beta.2 — 2026-08-17
 
 - **BaseUrl now requires https** on both `TetsIntegrationsClient` and `SsoUrlBuilder`; `http` is accepted only for loopback hosts (localhost, 127.0.0.1, ::1) during local development. Plain-http configurations sent the API key in cleartext, so they now throw `ArgumentException` at construction. Breaking only for that misconfigured http usage.
 - **Response buffering caps**: the SDK-owned `HttpClient` now limits response buffering to 32 MiB (injected clients are left to the caller to configure), and `TetsApiException.RawBody` retains at most 64 KiB of an error body, ending with `...[truncated by SDK]` when cut.
