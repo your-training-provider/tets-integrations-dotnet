@@ -7,7 +7,8 @@ using TeTS.Integrations.Sso;
 //
 // Required env: TETS_BASE_URL, TETS_API_KEY
 // Optional env: TETS_SSO_SECRET, TETS_INTEGRATION_SLUG, TETS_TENANT_ID, TETS_COURSE_ID,
-//               TETS_GROUP_ID (group to place the test user in; defaults to the org root group)
+//               TETS_GROUP_ID (group to place the test user in; without it the server uses the
+//               connection's configured default group, or rejects the create if none is configured)
 
 static string? Env(string name) =>
     Environment.GetEnvironmentVariable(name) is { Length: > 0 } v ? v : null;

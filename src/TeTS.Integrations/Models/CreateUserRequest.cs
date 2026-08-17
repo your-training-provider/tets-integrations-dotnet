@@ -19,6 +19,6 @@ public sealed class CreateUserRequest
     [JsonPropertyName("password")] public string? Password { get; set; }
     /// <summary>The user's organization/company name, when applicable.</summary>
     [JsonPropertyName("organization")] public string? Organization { get; set; }
-    /// <summary>Groups to assign; must belong to the resolved organization. Defaults to the org root group.</summary>
+    /// <summary>Groups to assign; must belong to the resolved organization. Defaults to the connection's configured default group; if none is configured, groupIds is required.</summary>
     [JsonPropertyName("groupIds")] public List<string>? GroupIds { get; set; }
 }

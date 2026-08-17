@@ -596,7 +596,7 @@ components:
           type: string
         groupIds:
           type: array
-          description: Groups to assign; must all belong to the resolved organization. Defaults to the org root group.
+          description: Groups to assign; must all belong to the resolved organization. Defaults to the connection's configured default group; if none is configured, groupIds is required.
           items:
             type: string
             format: uuid
