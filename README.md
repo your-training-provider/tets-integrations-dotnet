@@ -59,6 +59,12 @@ await client.Users.DeactivateAsync("your-stable-staff-id");
 
 `TetsIntegrationsClient` is `IDisposable` — the `using` above disposes the `HttpClient` it created for you. `Users.CreateAsync` sends an `Idempotency-Key` header automatically, so the SDK's own internal retries on transient failures reuse it and never create a duplicate user. A key is scoped to one `CreateAsync` call, though: if *you* call it again yourself (e.g. after a client-side timeout), that's a fresh key, not a replay — the fallback protection there is `externalId`/email uniqueness, which surfaces as `IntegrationExternalIdTaken` or `UserEmailTaken` instead of silently creating a duplicate.
 
+## Identifiers
+
+`externalId` is **your** identifier — the stable staff/member ID your system already tracks. You choose it when you call `CreateAsync` (or pass it as `identification` on an SSO launch URL), it never changes, and every user-facing call in this SDK accepts it — so you never need to store TeTS's internal UUIDs for users.
+
+In roster results (`Users.ListAsync`), `ExternalId` is `null` for accounts that exist on the platform but aren't linked to your integration yet — typically accounts migrated from a legacy platform. Linking happens automatically the first time such a user launches via SSO with `identification` set, or TeTS can bulk-link a whole organization from a CSV before cutover; see [docs/migrating-from-topyx.md](https://github.com/your-training-provider/tets-integrations-dotnet/blob/main/docs/migrating-from-topyx.md) for the full migration story.
+
 ## Smoke test
 
 The fastest way to verify your staging credentials end-to-end is the bundled smoke test — run it before writing any code:
@@ -269,6 +275,10 @@ if (client.LastRateLimit is { } rateLimit)
 The API serves its own OpenAPI contract at `/api/integrations/v1/openapi.yaml`. This SDK is locked to that contract by a CI parity test that fails the build if a model or operation drifts out of sync with the server's document. The package follows semver, and `/v1` routes are stable for the lifetime of v1 — breaking changes ship as a new version prefix, not in place.
 
 One caveat: a few SSO query parameters accepted by the server (profile fields like `firstName`/`lastName`/`email`/`organization`/`jobTitle`, and `courseName`/`contentId`/`programName`) aren't yet listed in the OpenAPI document, even though the endpoint accepts them. `SsoLaunchRequest` supports the full set regardless — the SDK isn't limited to what's currently documented.
+
+## Not yet in API v1
+
+So expectations are set early: these capabilities have no v1 endpoint yet — manager/supervisor provisioning (learner provisioning only, for now), catalog export, certificate download, self-service API key rotation, and push webhooks (completions and status changes are polling-only via `Reports.GetCompletionsAsync` and `Users.ListAsync`). Ask your TeTS onboarding contact about timelines if your integration depends on one.
 
 ## Getting help
 
