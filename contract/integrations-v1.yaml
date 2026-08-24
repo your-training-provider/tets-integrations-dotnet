@@ -500,6 +500,11 @@ components:
         An expired key returns 401 UNAUTHORIZED; a key missing the endpoint's scope
         returns 403 INSUFFICIENT_SCOPE. Legacy admin-issued keys without scopes have
         full access.
+      # Machine-readable scope catalog; a CI drift test keeps this in sync with the server.
+      x-integration-scopes:
+        - users:read
+        - users:write
+        - reports:read
     BearerApiKey:
       type: http
       scheme: bearer

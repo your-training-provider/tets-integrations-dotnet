@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Contract sync**: refreshed `contract/integrations-v1.yaml` from the live server, picking up the `x-integration-scopes` scope catalog annotation added by the platform's 2026-08-20 release (documentation metadata; no API surface or SDK code change).
+- **Contract drift check**: a scheduled workflow now diffs the embedded contract against the live server document each weekday, opening a `contract-drift` tracking issue on any difference and closing it once resolved. `scripts/sync-contract.sh` refreshes the embedded copy; see `docs/contract-sync.md` for the full sync and versioning model.
+
 ## 1.0.0-beta.2 — 2026-08-17
 
 - **BaseUrl now requires https** on both `TetsIntegrationsClient` and `SsoUrlBuilder`; `http` is accepted only for loopback hosts (localhost, 127.0.0.1, ::1) during local development. Plain-http configurations sent the API key in cleartext, so they now throw `ArgumentException` at construction. Breaking only for that misconfigured http usage.

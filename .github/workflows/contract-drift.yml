@@ -1,0 +1,111 @@
+# Detects when the live server's OpenAPI contract has moved ahead of the copy
+# embedded in this repo (contract/integrations-v1.yaml). The parity tests lock the
+# SDK to the embedded copy, so this workflow is what closes the loop back to the
+# real server between SDK releases.
+#
+# On drift: opens (or updates) a tracking issue labeled `contract-drift` with the
+# diff, and fails the run. To resolve: run scripts/sync-contract.sh, then
+# `dotnet test`; the parity tests report any operations or models the SDK now
+# needs to cover. The next green run closes the issue automatically.
+#
+# Note: GitHub disables scheduled workflows after 60 days without repo commits.
+# If the repo goes quiet, re-enable it under Actions or trigger it manually.
+name: Contract drift check
+on:
+  schedule:
+    - cron: "17 13 * * 1-5" # weekday mornings US Eastern
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  SPEC_URL: https://courses.trainingandetrackingsolutions.com/api/integrations/v1/openapi.yaml
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Fetch the live contract
+        run: curl -fsS --retry 3 --retry-delay 5 "$SPEC_URL" -o /tmp/live-openapi.yaml
+
+      - name: Diff against the embedded contract
+        id: diff
+        run: |
+          if diff -u contract/integrations-v1.yaml /tmp/live-openapi.yaml > /tmp/contract.diff; then
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+            echo "Embedded contract matches the live server contract."
+          else
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+            echo "Embedded contract differs from the live server contract:"
+            cat /tmp/contract.diff
+          fi
+
+      - name: Open or update the drift issue
+        if: steps.diff.outputs.drift == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let diff = fs.readFileSync('/tmp/contract.diff', 'utf8');
+            const LIMIT = 6000;
+            if (diff.length > LIMIT) diff = diff.slice(0, LIMIT) + '\n...[truncated; see the workflow run log for the full diff]';
+
+            const label = 'contract-drift';
+            try {
+              await github.rest.issues.createLabel({
+                ...context.repo, name: label, color: 'd93f0b',
+                description: 'Embedded OpenAPI contract is behind the live server',
+              });
+            } catch (e) { if (e.status !== 422) throw e; }
+
+            const title = 'Contract drift: embedded OpenAPI contract is behind the live server';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              '<!-- contract-drift-check -->',
+              `The live contract at ${process.env.SPEC_URL} no longer matches \`contract/integrations-v1.yaml\`.`,
+              '',
+              '**To resolve:**',
+              '1. `scripts/sync-contract.sh` refreshes the embedded copy from the live server.',
+              '2. `dotnet test` runs the contract parity tests, which list any operations or models the SDK now needs to cover.',
+              '3. If the SDK surface changed, wrap the new surface and cut a release; if the change is documentation metadata only, committing the refreshed contract is enough.',
+              '',
+              `Latest detection: [workflow run](${runUrl})`,
+              '',
+              '```diff',
+              diff,
+              '```',
+            ].join('\n');
+
+            const open = await github.rest.issues.listForRepo({ ...context.repo, state: 'open', labels: label });
+            if (open.data.length > 0) {
+              await github.rest.issues.update({ ...context.repo, issue_number: open.data[0].number, body });
+              core.info(`Updated existing drift issue #${open.data[0].number}`);
+            } else {
+              const created = await github.rest.issues.create({ ...context.repo, title, body, labels: [label] });
+              core.info(`Opened drift issue #${created.data.number}`);
+            }
+
+      - name: Close resolved drift issues
+        if: steps.diff.outputs.drift == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const open = await github.rest.issues.listForRepo({ ...context.repo, state: 'open', labels: 'contract-drift' });
+            for (const issue of open.data) {
+              await github.rest.issues.createComment({
+                ...context.repo, issue_number: issue.number,
+                body: 'The embedded contract now matches the live server contract. Closing.',
+              });
+              await github.rest.issues.update({ ...context.repo, issue_number: issue.number, state: 'closed' });
+              core.info(`Closed resolved drift issue #${issue.number}`);
+            }
+
+      - name: Fail the run on drift
+        if: steps.diff.outputs.drift == 'true'
+        run: |
+          echo "::error::contract/integrations-v1.yaml is out of sync with $SPEC_URL. Run scripts/sync-contract.sh, then 'dotnet test' to see whether the SDK surface needs work."
+          exit 1

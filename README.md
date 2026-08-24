@@ -277,7 +277,7 @@ if (client.LastRateLimit is { } rateLimit)
 
 ## Contract & versioning
 
-The API serves its own OpenAPI contract at `/api/integrations/v1/openapi.yaml`. This SDK is locked to that contract by a CI parity test that fails the build if a model or operation drifts out of sync with the server's document. The package follows semver, and `/v1` routes are stable for the lifetime of v1 — breaking changes ship as a new version prefix, not in place.
+The API serves its own OpenAPI contract at `/api/integrations/v1/openapi.yaml`. This SDK is locked to that contract two ways: a CI parity test fails the build if a model or operation drifts out of sync with the embedded copy of the document, and a scheduled workflow diffs that embedded copy against the live server each weekday, so a server-side contract change is surfaced within a day even between SDK releases (see [docs/contract-sync.md](https://github.com/your-training-provider/tets-integrations-dotnet/blob/main/docs/contract-sync.md)). The package follows semver, and `/v1` routes are stable for the lifetime of v1 — breaking changes ship as a new version prefix, not in place.
 
 One caveat: a few SSO query parameters accepted by the server (profile fields like `firstName`/`lastName`/`email`/`organization`/`jobTitle`, and `courseName`/`contentId`/`programName`) aren't yet listed in the OpenAPI document, even though the endpoint accepts them. `SsoLaunchRequest` supports the full set regardless — the SDK isn't limited to what's currently documented.
 
