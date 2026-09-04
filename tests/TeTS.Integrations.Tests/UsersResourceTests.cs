@@ -220,4 +220,90 @@ public class UsersResourceTests
         Assert.Equal("userName", ex.ParamName);
         Assert.Empty(handler.Requests);
     }
+    private const string LinkedBody = """
+      {"created":true,"user":{"userId":"5b0d2f1e-0000-0000-0000-000000000009","externalId":"guid-9",
+       "userName":"riley.quinn","firstName":"Riley","lastName":"Quinn","email":"r@example.com","status":"active"}}
+      """;
+
+    [Fact]
+    public async Task Link_ByUserId_SendsPost_AndReturnsCreatedFlag()
+    {
+        var (client, handler) = Make();
+        handler.Enqueue(HttpStatusCode.OK, LinkedBody);
+        var result = await client.Users.LinkAsync(new LinkUserRequest
+        { ExternalId = "guid-9", UserId = "5b0d2f1e-0000-0000-0000-000000000009" });
+        Assert.True(result.Created);
+        Assert.Equal("guid-9", result.User.ExternalId);
+        Assert.Equal("riley.quinn", result.User.UserName);
+        var recorded = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, recorded.Request.Method);
+        Assert.EndsWith("/api/integrations/v1/users/link", recorded.Request.RequestUri!.AbsolutePath);
+        Assert.Contains("\"externalId\":\"guid-9\"", recorded.Body);
+        Assert.Contains("\"userId\":\"5b0d2f1e-0000-0000-0000-000000000009\"", recorded.Body);
+        Assert.DoesNotContain("userName", recorded.Body);
+        Assert.False(recorded.Request.Headers.Contains("Idempotency-Key"));
+    }
+
+    [Fact]
+    public async Task Link_ByUserName_SendsUserNameOnly()
+    {
+        var (client, handler) = Make();
+        handler.Enqueue(HttpStatusCode.OK, LinkedBody.Replace("\"created\":true", "\"created\":false"));
+        var result = await client.Users.LinkAsync(new LinkUserRequest { ExternalId = "guid-9", UserName = "riley.quinn" });
+        Assert.False(result.Created);
+        var recorded = Assert.Single(handler.Requests);
+        Assert.Contains("\"userName\":\"riley.quinn\"", recorded.Body);
+        Assert.DoesNotContain("userId", recorded.Body);
+    }
+
+    [Fact]
+    public async Task Link_AlreadyLinked_SurfacesTypedCode()
+    {
+        var (client, handler) = Make();
+        handler.Enqueue(HttpStatusCode.Conflict,
+            """{"error":"already linked","code":"INTEGRATION_USER_ALREADY_LINKED","requestId":"req_1"}""");
+        var ex = await Assert.ThrowsAsync<TetsApiException>(() =>
+            client.Users.LinkAsync(new LinkUserRequest { ExternalId = "guid-9", UserId = "u1" }));
+        Assert.Equal(TetsErrorCode.IntegrationUserAlreadyLinked, ex.Code);
+        Assert.Equal("req_1", ex.RequestId);
+    }
+
+    [Fact]
+    public async Task Link_NullUserInEnvelope_ThrowsTetsApiException_NotNullOrNRE()
+    {
+        var (client, handler) = Make();
+        handler.Enqueue(HttpStatusCode.OK, """{"created":true,"user":null}""");
+        var ex = await Assert.ThrowsAsync<TetsApiException>(() =>
+            client.Users.LinkAsync(new LinkUserRequest { ExternalId = "guid-9", UserId = "u1" }));
+        Assert.Equal(TetsErrorCode.Unknown, ex.Code);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("u1", "riley.quinn")]
+    [InlineData(" ", null)]
+    public async Task Link_RequiresExactlyOneIdentifier_BeforeAnyRequest(string? userId, string? userName)
+    {
+        var (client, handler) = Make();
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            client.Users.LinkAsync(new LinkUserRequest { ExternalId = "guid-9", UserId = userId, UserName = userName }));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task Link_RequiresExternalId_BeforeAnyRequest()
+    {
+        var (client, handler) = Make();
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            client.Users.LinkAsync(new LinkUserRequest { ExternalId = " ", UserId = "u1" }));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task LinkAsync_NullRequest_ThrowsArgumentNullException_BeforeAnyRequest()
+    {
+        var (client, handler) = Make();
+        await Assert.ThrowsAsync<ArgumentNullException>(() => client.Users.LinkAsync(null!));
+        Assert.Empty(handler.Requests);
+    }
 }
