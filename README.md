@@ -48,6 +48,14 @@ var user = await client.Users.CreateAsync(new CreateUserRequest
 await foreach (var member in client.Users.ListAsync())
     Console.WriteLine($"{member.UserName}: linked={member.ExternalId is not null}");
 
+// 4b. Link a pre-existing learner to your identifier (idempotent; never overwrites a different id)
+var link = await client.Users.LinkAsync(new LinkUserRequest
+{
+    ExternalId = "your-stable-staff-id",
+    UserId = "platform-user-id-from-ListAsync",   // or UserName = "casey.lee"
+});
+Console.WriteLine(link.Created ? "linked" : "already linked");
+
 // 5. Map your course identifiers (auto-paginated; LegacyCourseId is what completions
 //    emit as courseId and SSO deep links accept as courseId/cid)
 await foreach (var item in client.Catalog.ListAsync())

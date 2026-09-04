@@ -7,7 +7,7 @@ using TeTS.Integrations.Models;
 
 namespace TeTS.Integrations.Resources;
 
-/// <summary>User provisioning and lifecycle: create, look up, list, update, activate/deactivate.</summary>
+/// <summary>User provisioning and lifecycle: create, look up, list, update, link, activate/deactivate.</summary>
 public sealed class UsersResource
 {
     private const string BasePath = "/api/integrations/v1/users";
@@ -148,6 +148,44 @@ public sealed class UsersResource
         return _connection.SendAsync<UserExistsResponse>(HttpMethod.Get, BasePath + "/exists",
             query: new[] { new KeyValuePair<string, string>("userName", userName) },
             tenantOverride: organizationTenantId, ct: cancellationToken);
+    }
+
+    /// <summary>
+    /// Attaches your <c>externalId</c> to a platform user that already exists but is not yet linked to
+    /// your integration. Find candidates with <see cref="ListAsync"/> (rows whose
+    /// <see cref="UserListItem.ExternalId"/> is null) or <see cref="CheckExistsAsync"/>
+    /// (<c>LinkedToIntegration</c> false), then link by <see cref="LinkUserRequest.UserId"/> or
+    /// <see cref="LinkUserRequest.UserName"/>. Idempotent: repeating the same pair returns
+    /// <see cref="LinkUserResult.Created"/> false.
+    /// </summary>
+    /// <param name="request">The external identifier and exactly one of <c>UserId</c> / <c>UserName</c>.</param>
+    /// <param name="organizationTenantId">Overrides <see cref="TetsOptions.OrganizationTenantId"/> for this call only.</param>
+    /// <param name="cancellationToken">Token to cancel the request.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="request"/> is null.</exception>
+    /// <exception cref="ArgumentException"><c>ExternalId</c> is blank, or <c>UserId</c> / <c>UserName</c> are not exactly one set.</exception>
+    /// <exception cref="TetsApiException">
+    /// No matching user (<see cref="TetsErrorCode.IntegrationUserNotFound"/>), the user already carries a
+    /// different external id (<see cref="TetsErrorCode.IntegrationUserAlreadyLinked"/>), the external id is
+    /// attached to another user (<see cref="TetsErrorCode.IntegrationExternalIdTaken"/>), or the response
+    /// could not be unwrapped.
+    /// </exception>
+    public async Task<LinkUserResult> LinkAsync(LinkUserRequest request, string? organizationTenantId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (request is null) throw new ArgumentNullException(nameof(request));
+        if (string.IsNullOrWhiteSpace(request.ExternalId))
+            throw new ArgumentException("ExternalId is required.", nameof(request));
+        var hasUserId = !string.IsNullOrWhiteSpace(request.UserId);
+        var hasUserName = !string.IsNullOrWhiteSpace(request.UserName);
+        if (hasUserId == hasUserName)
+            throw new ArgumentException("Set exactly one of UserId or UserName to identify the user.", nameof(request));
+
+        var result = await _connection.SendAsync<LinkUserResult>(HttpMethod.Post, BasePath + "/link",
+            body: request, tenantOverride: organizationTenantId, ct: cancellationToken).ConfigureAwait(false);
+        if (result.User is null)
+            throw new TetsApiException(HttpStatusCode.OK, TetsErrorCode.Unknown,
+                "SDK check failed: the server response did not contain the expected 'user' object.", requestId: null, details: null, rawBody: null);
+        return result;
     }
 
     /// <summary>Sets a user's status to active.</summary>

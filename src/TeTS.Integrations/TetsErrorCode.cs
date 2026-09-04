@@ -29,6 +29,8 @@ public enum TetsErrorCode
     IdempotencyRequestInFlight,
     /// <summary><c>externalId</c> is already linked to a different user in this organization.</summary>
     IntegrationExternalIdTaken,
+    /// <summary>The user is already linked to a different <c>externalId</c> for this integration (link never overwrites).</summary>
+    IntegrationUserAlreadyLinked,
     /// <summary>The email is already in use by another user.</summary>
     UserEmailTaken,
     /// <summary>The username is already in use.</summary>
@@ -65,6 +67,7 @@ public static class TetsErrorCodeMapper
         ["INTEGRATION_USER_NOT_FOUND"] = TetsErrorCode.IntegrationUserNotFound,
         ["IDEMPOTENCY_REQUEST_IN_FLIGHT"] = TetsErrorCode.IdempotencyRequestInFlight,
         ["INTEGRATION_EXTERNAL_ID_TAKEN"] = TetsErrorCode.IntegrationExternalIdTaken,
+        ["INTEGRATION_USER_ALREADY_LINKED"] = TetsErrorCode.IntegrationUserAlreadyLinked,
         ["USER_EMAIL_TAKEN"] = TetsErrorCode.UserEmailTaken,
         ["USERNAME_TAKEN"] = TetsErrorCode.UsernameTaken,
         ["IDEMPOTENCY_KEY_REUSED"] = TetsErrorCode.IdempotencyKeyReused,

@@ -246,6 +246,56 @@ paths:
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/FeatureDisabled" }
+  /api/integrations/v1/users/link:
+    post:
+      tags: [Users]
+      summary: Link an existing user to your externalId
+      description: |
+        Attaches your `externalId` to a platform user that already exists but
+        is not yet linked to your integration (a user a manager created in the
+        TeTS UI, or one migrated without an ID on file). Find such users with
+        `GET /users/list` (`externalId: null`) or `GET /users/exists`
+        (`linkedToIntegration: false`), then send their `userId` or `userName`.
+
+        Idempotent: repeating the same `externalId` + user returns `200` with
+        `created: false`. Linking a user that already carries a different
+        `externalId` returns `409 INTEGRATION_USER_ALREADY_LINKED`; an
+        `externalId` already attached to another user returns
+        `409 INTEGRATION_EXTERNAL_ID_TAKEN`.
+
+        Refusals: no matching user → `404 INTEGRATION_USER_NOT_FOUND`; a user
+        outside your organization connection → `403 INTEGRATION_USER_OUT_OF_SCOPE`;
+        a key with no organization connection scope →
+        `400 INTEGRATION_CONNECTION_REQUIRED`; platform administrators and
+        accounts whose roles reach outside your organization (manager of a group
+        elsewhere, partner developer, auditor) → `400 INTEGRATION_BAD_INPUT`.
+        Requires the `users:write` scope.
+      parameters:
+        - $ref: "#/components/parameters/TenantHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkUserRequest"
+      responses:
+        "200":
+          description: Linked (or already linked to the same externalId).
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkUserResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
   /api/integrations/v1/users/list:
     get:
       tags: [Users]
@@ -639,6 +689,7 @@ components:
             - INTEGRATION_USER_NOT_FOUND
             - IDEMPOTENCY_REQUEST_IN_FLIGHT
             - INTEGRATION_EXTERNAL_ID_TAKEN
+            - INTEGRATION_USER_ALREADY_LINKED
             - USER_EMAIL_TAKEN
             - USERNAME_TAKEN
             - IDEMPOTENCY_KEY_REUSED
@@ -727,6 +778,30 @@ components:
           items:
             type: string
             format: uuid
+    LinkUserRequest:
+      type: object
+      required: [externalId]
+      description: Provide exactly one of userId or userName.
+      properties:
+        externalId:
+          type: string
+          description: Your identifier for this person (for iCM, the Staff GUID).
+        userId:
+          type: string
+          format: uuid
+          description: Platform user id as returned by GET /users/list.
+        userName:
+          type: string
+          description: Platform username as checked by GET /users/exists.
+    LinkUserResponse:
+      type: object
+      required: [user, created]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        created:
+          type: boolean
+          description: True when this call created the link; false when the identical link already existed.
     User:
       type: object
       required: [userId, externalId, firstName, lastName, status]

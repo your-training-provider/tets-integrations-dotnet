@@ -30,6 +30,7 @@ public class ContractParityTests
         "patch /api/integrations/v1/users",
         "get /api/integrations/v1/users/exists",
         "patch /api/integrations/v1/users/status",
+        "post /api/integrations/v1/users/link",
         "get /api/integrations/v1/users/list",
         "get /api/integrations/v1/reports/completions",
         "get /api/integrations/v1/catalog",
@@ -46,6 +47,8 @@ public class ContractParityTests
         ["UserExistsResponse"] = typeof(UserExistsResponse),
         ["UpdateUserStatusRequest"] = typeof(UserStatusChangeRequest),
         ["UpdateUserStatusResult"] = typeof(UserStatusResult),
+        ["LinkUserRequest"] = typeof(LinkUserRequest),
+        ["LinkUserResponse"] = typeof(LinkUserResult),
         ["UserListItem"] = typeof(UserListItem),
         ["UserListResponse"] = typeof(UserListResponse),   // internal envelope, visible via InternalsVisibleTo
         ["Pagination"] = typeof(Pagination),
