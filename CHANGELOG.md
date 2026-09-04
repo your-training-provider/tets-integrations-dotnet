@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.1.0-beta.1 — 2026-09-04
+
 - **Users.LinkAsync** (new, minor): wraps `POST /api/integrations/v1/users/link`, attaching your `externalId` to a platform user that already exists but is not yet linked (a learner a manager created in the TeTS UI, or one migrated without an id on file). Identify the user by `UserId` (from `Users.ListAsync` rows with a null `ExternalId`) or `UserName`; the call is idempotent (`LinkUserResult.Created` is false on a replay) and never overwrites: a user already carrying a different id fails with the new `TetsErrorCode.IntegrationUserAlreadyLinked` (`409 INTEGRATION_USER_ALREADY_LINKED`). Contract refreshed to include the operation, its schemas, and the error code.
 - **Contract sync**: refreshed `contract/integrations-v1.yaml` from the live server, picking up the `x-integration-scopes` scope catalog annotation added by the platform's 2026-08-20 release (documentation metadata; no API surface or SDK code change).
 - **Contract drift check**: a scheduled workflow now diffs the embedded contract against the live server document each weekday, opening a `contract-drift` tracking issue on any difference and closing it once resolved. `scripts/sync-contract.sh` refreshes the embedded copy; see `docs/contract-sync.md` for the full sync and versioning model.
