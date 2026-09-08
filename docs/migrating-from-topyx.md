@@ -21,7 +21,7 @@ The TeTS Integrations API v1 replaces the old SOAP/manual Topyx integration surf
 - **Endpoint path.** Point your signed launch URLs at `/api/integrations/v1/sso` instead of the legacy Topyx SSO path.
 - **Slug parameter.** Emit `integration=<slug>` instead of `partner=<slug>`. The server still accepts the legacy `partner=` alias, so nothing breaks if you haven't updated it yet — but new integrations should emit `integration=`.
 - **Signature semantics are unchanged.** `username`, `timestamp`, `sessionTimeOut`, and `signature` mean exactly what they meant under Topyx, and the signature is computed the same way: `MD5(secret + username + sessionTimeOut + timestamp)`, lowercase hex.
-- **`identification` now upserts `externalId`.** If you pass `identification`, TeTS links (or creates) the user with that value as their stable `externalId` — the same field `Users.CreateAsync` and `Users.GetByExternalIdAsync` use. Use the same value you'd otherwise pass to `CreateAsync`'s `ExternalId`.
+- **`identification` links `externalId` on the first launch.** If you pass `identification` for a user who is not yet linked, TeTS links that user to the value as their stable `externalId` — the same field `Users.CreateAsync` and `Users.GetByExternalIdAsync` use. It is never re-pointed: if the value already belongs to another user, or the user already carries a different `externalId`, the launch still signs the user in and leaves the link unchanged (TeTS audits the difference; `Users.ListAsync` shows what is on file, and `Users.LinkAsync` refuses the same conflicts with a 409, so ask your onboarding contact to correct one). The launch does not create accounts: an unknown username is refused, so create the user with `Users.CreateAsync` first. Use the same value you'd otherwise pass to `CreateAsync`'s `ExternalId`.
 - **Multi-organization partners** should add `organizationTenantId` to the launch URL (or set `TetsOptions.OrganizationTenantId`) — required once your connection serves more than one organization.
 - **URLs expire.** A signed launch URL is only valid for about 5 minutes from its `timestamp`. Build it at click time; don't cache or email it.
 
@@ -29,7 +29,7 @@ The TeTS Integrations API v1 replaces the old SOAP/manual Topyx integration surf
 
 The identifier you already track per staff member is the identifier TeTS uses. `externalId` is your stable staff ID — the same value your Topyx-era integration stored per user (many partners kept it in a Topyx custom field). You choose it, you keep it, TeTS never rewrites it. It appears as `ExternalId` on REST calls and `identification` on SSO launch URLs.
 
-TeTS user and group ids are UUIDs, but you don't migrate anything to them and never need to persist them — every user-facing SDK call identifies users by *your* `externalId`. For accounts migrated from the legacy platform, the link between your ID and the TeTS account is established automatically the first time that user launches via SSO with `identification` set, or TeTS can bulk-link a whole organization from a CSV of `externalId, username-or-email` pairs before cutover — ask your onboarding contact. [Syncing your staff roster](#syncing-your-staff-roster) shows you which accounts are linked at any time.
+TeTS user and group ids are UUIDs, but you don't migrate anything to them and never need to persist them — every user-facing SDK call identifies users by *your* `externalId`. For accounts migrated from the legacy platform, the link between your ID and the TeTS account is established by `Users.LinkAsync`, or automatically the first time that unlinked user launches via SSO with `identification` set, or TeTS can bulk-link a whole organization from a CSV of `externalId, username-or-email` pairs before cutover — ask your onboarding contact. [Syncing your staff roster](#syncing-your-staff-roster) shows you which accounts are linked at any time.
 
 ## From legacy group IDs to organization tenants
 
@@ -57,7 +57,7 @@ await foreach (var user in client.Users.ListAsync())
 }
 ```
 
-Rows with `externalId: null` are accounts migrated from the legacy platform that aren't linked to your integration yet. Linking happens automatically the first time such a user launches via SSO with `identification` set (see above) — or TeTS can bulk-link your accounts from a CSV before cutover; ask your onboarding contact. Filter to one group with `ListUsersOptions.GroupId`.
+Rows with `externalId: null` are accounts migrated from the legacy platform that aren't linked to your integration yet. Link them with `Users.LinkAsync`; an unlinked user is also linked automatically the first time they launch via SSO with `identification` set (see above) — or TeTS can bulk-link your accounts from a CSV before cutover; ask your onboarding contact. Filter to one group with `ListUsersOptions.GroupId`.
 
 ## Mapping your course catalog
 
