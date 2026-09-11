@@ -462,7 +462,9 @@ paths:
         signature). Unlike the REST endpoints, this route does not use API-key
         auth or the JSON error envelope: failures redirect to the login page
         with an explanatory message. `organizationTenantId` is required when
-        the integration has multiple active org connections.
+        the integration has multiple active org connections. Unknown usernames
+        are not auto-created; create the account first. Accounts with platform
+        or cross-organization privileges cannot launch through SSO.
 
         For iframe-native partner launch, send `embed=1` and `embedOrigin`
         with the partner application's exact origin. TeTS only issues an
@@ -510,7 +512,14 @@ paths:
         - in: query
           name: identification
           required: false
-          description: Integrator's stable staff identifier; upserted as the user's externalId.
+          description: >-
+            Integrator's stable staff identifier. Linked as the user's externalId on the
+            first launch of an unlinked user, after the org-scope checks, and never
+            re-pointed: if it already belongs to another user, or the user is already
+            linked to a different identifier, the launch still signs the user in but
+            leaves the link unchanged. See the identifier on file with GET /users/list;
+            POST /users/link links an unlinked user but refuses both conflicts (409), so
+            ask TeTS to correct an identifier on an already-linked user.
           schema:
             type: string
         - in: query

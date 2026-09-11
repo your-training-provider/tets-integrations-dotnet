@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Docs and contract sync (no SDK code change)**: the platform's 2026-09 SSO hardening links `identification` only for a user who is not yet linked and never re-points an id that is on file; a conflict is audited server-side and the launch still signs the user in. Unknown usernames are refused at the launch (create the user with `Users.CreateAsync` first), and accounts with platform or cross-organization privileges cannot launch through SSO. README, migration guide and the `UserListItem.ExternalId` and `SsoLaunchRequest.Identification` doc comments updated; `contract/integrations-v1.yaml` refreshed (parameter and route descriptions only).
+
 ## 1.1.0-beta.1 — 2026-09-04
 
 - **Users.LinkAsync** (new, minor): wraps `POST /api/integrations/v1/users/link`, attaching your `externalId` to a platform user that already exists but is not yet linked (a learner a manager created in the TeTS UI, or one migrated without an id on file). Identify the user by `UserId` (from `Users.ListAsync` rows with a null `ExternalId`) or `UserName`; the call is idempotent (`LinkUserResult.Created` is false on a replay) and never overwrites: a user already carrying a different id fails with the new `TetsErrorCode.IntegrationUserAlreadyLinked` (`409 INTEGRATION_USER_ALREADY_LINKED`). Contract refreshed to include the operation, its schemas, and the error code.

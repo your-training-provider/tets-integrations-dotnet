@@ -76,7 +76,7 @@ await client.Users.DeactivateAsync("your-stable-staff-id");
 
 `externalId` is **your** identifier — the stable staff/member ID your system already tracks. You choose it when you call `CreateAsync` (or pass it as `identification` on an SSO launch URL), it never changes, and every user-facing call in this SDK accepts it — so you never need to store TeTS's internal UUIDs for users.
 
-In roster results (`Users.ListAsync`), `ExternalId` is `null` for accounts that exist on the platform but aren't linked to your integration yet — typically accounts migrated from a legacy platform. Linking happens automatically the first time such a user launches via SSO with `identification` set, or TeTS can bulk-link a whole organization from a CSV before cutover; see [docs/migrating-from-topyx.md](https://github.com/your-training-provider/tets-integrations-dotnet/blob/main/docs/migrating-from-topyx.md) for the full migration story.
+In roster results (`Users.ListAsync`), `ExternalId` is `null` for accounts that exist on the platform but aren't linked to your integration yet — typically accounts migrated from a legacy platform. Link them with `Users.LinkAsync`; an unlinked user is also linked automatically the first time they launch via SSO with `identification` set (the launch never re-points an id that is already on file), or TeTS can bulk-link a whole organization from a CSV before cutover; see [docs/migrating-from-topyx.md](https://github.com/your-training-provider/tets-integrations-dotnet/blob/main/docs/migrating-from-topyx.md) for the full migration story.
 
 ## Smoke test
 

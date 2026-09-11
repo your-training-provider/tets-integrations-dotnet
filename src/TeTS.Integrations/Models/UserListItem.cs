@@ -10,8 +10,8 @@ public sealed class UserListItem
     /// <summary>
     /// Your stable staff identifier for this user. Null when the user is not yet linked to your
     /// integration — for example an account migrated from the legacy platform that has not yet been
-    /// linked (linking happens on the user's first SSO launch with <c>identification</c>, or via a
-    /// TeTS bulk link).
+    /// linked (link it with <c>Users.LinkAsync</c>; an unlinked user is also linked on their first SSO
+    /// launch with <c>identification</c>, never re-pointed afterwards; or via a TeTS bulk link).
     /// </summary>
     [JsonPropertyName("externalId")] public string? ExternalId { get; set; }
     /// <summary>The user's platform username, when set.</summary>
