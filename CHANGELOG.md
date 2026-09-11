@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Docs and contract sync (no SDK code change)**: the platform's 2026-09 SSO hardening links `identification` only for a user who is not yet linked and never re-points an id that is on file; a conflict is audited server-side and the launch still signs the user in. Unknown usernames are refused at the launch (create the user with `Users.CreateAsync` first), and accounts with platform or cross-organization privileges cannot launch through SSO. README, migration guide and the `UserListItem.ExternalId` doc comment updated; `contract/integrations-v1.yaml` refreshed (parameter and route descriptions only).
+- **Docs and contract sync (no SDK code change)**: the platform's 2026-09 SSO hardening links `identification` only for a user who is not yet linked and never re-points an id that is on file; a conflict is audited server-side and the launch still signs the user in. Unknown usernames are refused at the launch (create the user with `Users.CreateAsync` first), and accounts with platform or cross-organization privileges cannot launch through SSO. README, migration guide and the `UserListItem.ExternalId` and `SsoLaunchRequest.Identification` doc comments updated; `contract/integrations-v1.yaml` refreshed (parameter and route descriptions only).
 
 ## 1.1.0-beta.1 — 2026-09-04
 

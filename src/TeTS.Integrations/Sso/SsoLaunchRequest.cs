@@ -11,7 +11,13 @@ public sealed class SsoLaunchRequest
     public string UserName { get; set; } = "";
     /// <summary>Session duration in seconds, 1..28800 (8 h max). Default 28800.</summary>
     public int SessionTimeOutSeconds { get; set; } = 28800;
-    /// <summary>Your stable staff identifier; upserted as the user's externalId.</summary>
+    /// <summary>
+    /// Your stable staff identifier. Linked as the user's externalId on the first launch of a user
+    /// who is not yet linked, after the org-scope checks, and never re-pointed afterwards: if the
+    /// value already belongs to another user, or this user already carries a different identifier,
+    /// the launch still signs them in and leaves the link unchanged. <c>Users.ListAsync</c> shows
+    /// what is on file; ask TeTS to correct an identifier on an already-linked user.
+    /// </summary>
     public string? Identification { get; set; }
     /// <summary>JIT-provisioning profile field: the learner's first name.</summary>
     public string? FirstName { get; set; }
