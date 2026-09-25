@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: TeTS Integrations API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     REST API for integrator user provisioning, profile updates, completions
     reporting, catalog export, and SSO launch.
@@ -356,6 +356,15 @@ paths:
         Returns completed trainings for users linked to your integration within
         the resolved organization. Results are ordered by completion time and
         paginated; follow `pagination.nextCursor` until `hasMore` is false.
+
+        Every row carries `productId` and `productType`, which join to the
+        catalog export for any product type. Course rows also carry the legacy
+        `courseId`. Program rows (`productType: program`) carry `courseId: null`
+        and `legacyProgramId` instead; `courseName` is the program title and
+        `code` is the program SKU (`PROGRAM-<legacyProgramId>` for migrated
+        programs). A program's child courses always report as their own course
+        rows with `courseId` set, so a learner finishing a program produces one
+        row per child course plus one program row.
       parameters:
         - in: query
           name: from
@@ -398,6 +407,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CompletionsReport"
+              examples:
+                courseAndProgram:
+                  summary: A course completion and a program completion for the same learner
+                  value:
+                    from: "2026-09-01T00:00:00.000Z"
+                    to: "2026-09-30T23:59:59.999Z"
+                    count: 2
+                    completions:
+                      - userName: "jane.doe"
+                        firstName: "Jane"
+                        lastName: "Doe"
+                        courseName: "CPR Basics"
+                        courseId: 4521
+                        productId: "6f1c2a1e-6b0e-4a7f-9a3e-0c2c9a1c1a01"
+                        productType: "course"
+                        legacyProgramId: null
+                        userId: "0f2b7a9c-1d3e-4f5a-8b6c-7d8e9f0a1b2c"
+                        finalMark: 100
+                        externalId: "3c5f0a2d-8e7b-4d1a-9c6e-2b4f6a8c0e1d"
+                        identificationNumber: "3c5f0a2d-8e7b-4d1a-9c6e-2b4f6a8c0e1d"
+                        organization: null
+                        country: null
+                        completedDate: "2026-09-12T15:04:05.000Z"
+                        dateRegistered: "2026-09-01T09:00:00.000Z"
+                        email: "jane.doe@example.com"
+                        code: "CPR-101"
+                        expiresAt: "2028-09-12T15:04:05.000Z"
+                      - userName: "jane.doe"
+                        firstName: "Jane"
+                        lastName: "Doe"
+                        courseName: "DDS Phase 4 10 Hrs"
+                        courseId: null
+                        productId: "b9d4e2f0-3a1b-4c5d-8e6f-7a8b9c0d1e2f"
+                        productType: "program"
+                        legacyProgramId: 445
+                        userId: "0f2b7a9c-1d3e-4f5a-8b6c-7d8e9f0a1b2c"
+                        finalMark: null
+                        externalId: "3c5f0a2d-8e7b-4d1a-9c6e-2b4f6a8c0e1d"
+                        identificationNumber: "3c5f0a2d-8e7b-4d1a-9c6e-2b4f6a8c0e1d"
+                        organization: null
+                        country: null
+                        completedDate: "2026-09-12T15:04:05.000Z"
+                        dateRegistered: "2026-09-01T09:00:00.000Z"
+                        email: "jane.doe@example.com"
+                        code: "PROGRAM-445"
+                        expiresAt: null
+                    pagination:
+                      limit: 200
+                      hasMore: false
+                      nextCursor: null
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -413,7 +472,10 @@ paths:
         identifiers for SSO deep links and interpret completion reports.
         `legacyCourseId` is the id the completions report emits as `courseId`
         and SSO accepts as `courseId`/`cid`; programs deep-link via the SSO
-        `programId` parameter using `legacyProgramId`. Duplicate titles can
+        `programId` parameter using `legacyProgramId` (SSO also accepts it in
+        `courseId` when no course carries that id), and program completions
+        report it as `legacyProgramId`. `productId` joins to the completions
+        report for every product type. Duplicate titles can
         appear (legacy twin editions) — completions report whichever twin the
         learner actually completed. `renewOnly: true` marks superseded
         editions kept for interpreting historical completions and renewals —
@@ -447,6 +509,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CatalogListResponse"
+              examples:
+                courseAndElectiveProgram:
+                  summary: A course and an elective program that completes on any 2 of its 3 courses
+                  value:
+                    items:
+                      - productId: "6f1c2a1e-6b0e-4a7f-9a3e-0c2c9a1c1a01"
+                        productType: "course"
+                        title: "CPR Basics"
+                        code: "CPR-101"
+                        categoryNames: ["Safety"]
+                        certValidityDays: 730
+                        updatedAt: "2026-09-01T09:00:00.000Z"
+                        legacyCourseId: 4521
+                        legacyProgramId: null
+                        renewOnly: false
+                        programCourses: null
+                        completionRule: null
+                        requiredCourseCount: null
+                      - productId: "b9d4e2f0-3a1b-4c5d-8e6f-7a8b9c0d1e2f"
+                        productType: "program"
+                        title: "DSP Annual Electives"
+                        code: "PROGRAM-445"
+                        categoryNames: []
+                        certValidityDays: 365
+                        updatedAt: "2026-09-01T09:00:00.000Z"
+                        legacyCourseId: null
+                        legacyProgramId: 445
+                        renewOnly: false
+                        programCourses:
+                          - productId: "6f1c2a1e-6b0e-4a7f-9a3e-0c2c9a1c1a01"
+                            sortOrder: 0
+                            isRequired: true
+                          - productId: "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+                            sortOrder: 1
+                            isRequired: false
+                          - productId: "5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9"
+                            sortOrder: 2
+                            isRequired: false
+                        completionRule: "required_count"
+                        requiredCourseCount: 2
+                    pagination:
+                      limit: 200
+                      hasMore: false
+                      nextCursor: null
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -525,11 +631,23 @@ paths:
         - in: query
           name: courseId
           required: false
+          description: >-
+            Course to launch: the catalog's `legacyCourseId`, product id, or
+            SKU (`cid` is an accepted alias). If no course carries the id, the
+            value is retried as a program id (`legacyProgramId`, product id, or
+            SKU of a program) and the launch behaves exactly like `programId`.
+            When a course and a program share a legacy id the course wins; use
+            `programId` to reach the program.
           schema:
             type: string
         - in: query
           name: programId
           required: false
+          description: >-
+            Program to launch: the catalog's `legacyProgramId`, product id, or
+            SKU. Assigns the program and its child courses, then lands on the
+            learner's training list with the program open. Course targets take
+            precedence when both parameters resolve.
           schema:
             type: string
         - in: query
@@ -964,10 +1082,28 @@ components:
           type: string
         courseName:
           type: string
+          description: Product title; the program title on a program row.
         courseId:
           type: integer
           nullable: true
-          description: Legacy numeric course id when available.
+          description: Legacy numeric course id when available; null on program rows.
+        productId:
+          type: string
+          format: uuid
+          description: >-
+            Platform product id of the completed training; joins to the
+            catalog's `productId` for every product type. Added in 1.1.0.
+        productType:
+          type: string
+          enum: [course, program, class]
+          description: Added in 1.1.0.
+        legacyProgramId:
+          type: integer
+          nullable: true
+          description: >-
+            Legacy numeric program id on program rows, resolved from the same
+            sources as the catalog's `legacyProgramId`; null for courses and
+            classes. Added in 1.1.0.
         userId:
           type: string
           format: uuid
@@ -1087,6 +1223,26 @@ components:
           description: Child courses for programs; null for non-program products.
           items:
             $ref: "#/components/schemas/CatalogProgramCourse"
+        completionRule:
+          type: string
+          nullable: true
+          enum: [all_required, required_count, null]
+          description: >-
+            How a program completes; null for non-program products.
+            `all_required`: every child in `programCourses` must be completed.
+            `required_count`: any `requiredCourseCount` distinct children
+            suffice, but every child with `isRequired: true` must be among
+            them; the learner picks the rest in the TeTS training list.
+            Added in 1.1.0.
+        requiredCourseCount:
+          type: integer
+          nullable: true
+          description: >-
+            Distinct completed children that finish a `required_count`
+            program, the same number the learner sees ("Complete any N of M"),
+            already clamped to [children flagged required, child count]. Null
+            for `all_required` programs and non-program products. Added in
+            1.1.0.
     CatalogListResponse:
       type: object
       required: [items, pagination]

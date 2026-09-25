@@ -36,6 +36,19 @@ public sealed class CatalogItem
     [JsonPropertyName("renewOnly")] public bool RenewOnly { get; set; }
     /// <summary>Child courses for programs, in program order. Null for non-program products.</summary>
     [JsonPropertyName("programCourses")] public IReadOnlyList<CatalogProgramCourse>? ProgramCourses { get; set; }
+    /// <summary>
+    /// How a program completes: <c>all_required</c> (every child in <see cref="ProgramCourses"/> must be
+    /// completed) or <c>required_count</c> (any <see cref="RequiredCourseCount"/> distinct children suffice,
+    /// but every child with <c>IsRequired</c> true must be among them; the learner picks the rest in the
+    /// TeTS training list). Null for non-program products, and on servers that predate contract 1.1.0.
+    /// </summary>
+    [JsonPropertyName("completionRule")] public string? CompletionRule { get; set; }
+    /// <summary>
+    /// Distinct completed children that finish a <c>required_count</c> program, the same number the learner
+    /// sees ("Complete any N of M"), already clamped to [children flagged required, child count]. Null for
+    /// <c>all_required</c> programs and non-program products.
+    /// </summary>
+    [JsonPropertyName("requiredCourseCount")] public int? RequiredCourseCount { get; set; }
 }
 
 /// <summary>Wire shape of one page of the catalog. Internal; surfaced item-by-item via <c>Catalog.ListAsync</c>.</summary>

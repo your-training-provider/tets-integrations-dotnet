@@ -56,15 +56,18 @@ var link = await client.Users.LinkAsync(new LinkUserRequest
 });
 Console.WriteLine(link.Created ? "linked" : "already linked");
 
-// 5. Map your course identifiers (auto-paginated; LegacyCourseId is what completions
-//    emit as courseId and SSO deep links accept as courseId/cid)
+// 5. Map your training identifiers (auto-paginated; LegacyCourseId is what completions
+//    emit as courseId and SSO deep links accept as courseId/cid; programs carry
+//    LegacyProgramId, a CompletionRule, and their child courses)
 await foreach (var item in client.Catalog.ListAsync())
-    Console.WriteLine($"{item.Title}: legacyCourseId={item.LegacyCourseId}");
+    Console.WriteLine($"{item.Title} ({item.ProductType}): productId={item.ProductId} " +
+                      $"legacyCourseId={item.LegacyCourseId} legacyProgramId={item.LegacyProgramId}");
 
-// 6. Poll completions (pagination handled for you)
+// 6. Poll completions (pagination handled for you). Every row carries ProductId and
+//    ProductType, so a program completion is a row of its own next to its child courses.
 await foreach (var completion in client.Reports.GetCompletionsAsync(
     DateTime.UtcNow.AddDays(-7), DateTime.UtcNow))
-    Console.WriteLine($"{completion.UserName}: {completion.CourseName} @ {completion.CompletedDate}");
+    Console.WriteLine($"{completion.UserName}: {completion.CourseName} [{completion.ProductType}] @ {completion.CompletedDate}");
 
 // 7. Deactivate a learner who left
 await client.Users.DeactivateAsync("your-stable-staff-id");
@@ -148,6 +151,16 @@ Console.WriteLine(launchUrl.AbsoluteUri);
 ```
 
 Redirect the learner's browser to the returned URL.
+
+`CourseId` takes the catalog's `LegacyCourseId`, product id, or SKU. `ProgramId` launches a program instead: it takes the catalog's `LegacyProgramId`, product id, or SKU, assigns the program and its child courses, and lands on the learner's training list with the program open. As of server contract 1.1.0 a program's id passed as `CourseId` also lands on the program (the server retries a value no course carries as a program id), which keeps single-slot legacy launchers working; when a course and a program share a legacy id the course wins, so use `ProgramId` to reach the program.
+
+```csharp
+var programUrl = client.Sso.BuildLaunchUrl(new SsoLaunchRequest
+{
+    UserName = "casey.lee",
+    ProgramId = "445",   // CatalogItem.LegacyProgramId
+});
+```
 
 ### Embedding the player in an iframe
 

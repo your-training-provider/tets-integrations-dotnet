@@ -85,6 +85,66 @@ public class CatalogListPaginationTests
     }
 
     [Fact]
+    public async Task RequiredCountProgramRow_ExposesCompletionRuleAndRequiredCourseCount()
+    {
+        // The contract's catalog example: a course row (rule null) and a required_count elective program.
+        var (client, handler) = Make();
+        handler.Enqueue(HttpStatusCode.OK, """
+          {"items":[
+            {"productId":"6f1c2a1e-6b0e-4a7f-9a3e-0c2c9a1c1a01","productType":"course","title":"CPR Basics","code":"CPR-101",
+             "categoryNames":["Safety"],"certValidityDays":730,"updatedAt":"2026-09-01T09:00:00.000Z",
+             "legacyCourseId":4521,"legacyProgramId":null,"renewOnly":false,"programCourses":null,
+             "completionRule":null,"requiredCourseCount":null},
+            {"productId":"b9d4e2f0-3a1b-4c5d-8e6f-7a8b9c0d1e2f","productType":"program","title":"DSP Annual Electives","code":"PROGRAM-445",
+             "categoryNames":[],"certValidityDays":365,"updatedAt":"2026-09-01T09:00:00.000Z",
+             "legacyCourseId":null,"legacyProgramId":445,"renewOnly":false,
+             "programCourses":[
+               {"productId":"6f1c2a1e-6b0e-4a7f-9a3e-0c2c9a1c1a01","sortOrder":0,"isRequired":true},
+               {"productId":"1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d","sortOrder":1,"isRequired":false},
+               {"productId":"5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9","sortOrder":2,"isRequired":false}],
+             "completionRule":"required_count","requiredCourseCount":2}],
+           "pagination":{"limit":200,"hasMore":false,"nextCursor":null}}
+          """);
+        var items = new List<CatalogItem>();
+        await foreach (var item in client.Catalog.ListAsync())
+            items.Add(item);
+        Assert.Equal(2, items.Count);
+
+        var course = items[0];
+        Assert.Null(course.CompletionRule);       // non-program products carry no rule
+        Assert.Null(course.RequiredCourseCount);
+
+        var program = items[1];
+        Assert.Equal("required_count", program.CompletionRule);
+        Assert.Equal(2, program.RequiredCourseCount);
+        Assert.Equal(445, program.LegacyProgramId);
+        Assert.Equal("PROGRAM-445", program.Code);
+        Assert.Equal(3, program.ProgramCourses!.Count);
+        Assert.Equal(1, program.ProgramCourses.Count(c => c.IsRequired));   // required child must be among the 2
+    }
+
+    [Fact]
+    public async Task ProgramRow_FromPre110Server_LeavesCompletionRuleNull()
+    {
+        // Older servers omit completionRule/requiredCourseCount entirely; the row still deserializes.
+        var (client, handler) = Make();
+        handler.Enqueue(HttpStatusCode.OK, """
+          {"items":[{"productId":"p-prog","productType":"program","title":"Orientation Pathway","code":null,
+            "categoryNames":[],"certValidityDays":null,"updatedAt":"2026-07-15T00:00:00Z",
+            "legacyCourseId":null,"legacyProgramId":77,"renewOnly":false,
+            "programCourses":[{"productId":"child-1","sortOrder":1,"isRequired":true}]}],
+           "pagination":{"limit":200,"hasMore":false,"nextCursor":null}}
+          """);
+        var items = new List<CatalogItem>();
+        await foreach (var item in client.Catalog.ListAsync())
+            items.Add(item);
+        var program = Assert.Single(items);
+        Assert.Equal(77, program.LegacyProgramId);
+        Assert.Null(program.CompletionRule);
+        Assert.Null(program.RequiredCourseCount);
+    }
+
+    [Fact]
     public async Task ProgramRow_ProgramCoursesPopulatedInOrder_AndRenewOnlyCourseDeserializes()
     {
         var (client, handler) = Make();
