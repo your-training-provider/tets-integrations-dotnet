@@ -47,6 +47,7 @@ public sealed class TetsIntegrationsClient : IDisposable
         Users = new UsersResource(_connection);
         Reports = new ReportsResource(_connection);
         Catalog = new CatalogResource(_connection);
+        Groups = new GroupsResource(_connection);
     }
 
     /// <summary>Validates before allocating, so invalid options never leave an undisposed HttpClient behind.</summary>
@@ -86,6 +87,9 @@ public sealed class TetsIntegrationsClient : IDisposable
 
     /// <summary>Training catalog export.</summary>
     public CatalogResource Catalog { get; }
+
+    /// <summary>Organization group directory.</summary>
+    public GroupsResource Groups { get; }
 
     /// <summary>
     /// Signed SSO launch URL builder. Requires <see cref="TetsOptions.IntegrationSlug"/> and

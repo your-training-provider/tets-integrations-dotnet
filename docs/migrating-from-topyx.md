@@ -13,6 +13,7 @@ The TeTS Integrations API v1 replaces the old SOAP/manual Topyx integration surf
 | Completions report export (SOAP/report) | `client.Reports.GetCompletionsAsync(...)` — cursor-paginated REST |
 | Staff roster export (SOAP/report) | `client.Users.ListAsync(...)` — cursor-paginated REST |
 | Catalog export (SOAP/report) | `client.Catalog.ListAsync(...)` — cursor-paginated REST |
+| Group ids (sent to you by TeTS) | `client.Groups.ListAsync(...)`: match on `LegacyGroupId`, your existing group id |
 | Username availability checks (manual) | `client.Users.CheckExistsAsync(...)` |
 | Deactivation (manual request) | `client.Users.DeactivateAsync(...)` |
 
@@ -58,6 +59,12 @@ await foreach (var user in client.Users.ListAsync())
 ```
 
 Rows with `externalId: null` are accounts migrated from the legacy platform that aren't linked to your integration yet. Link them with `Users.LinkAsync`; an unlinked user is also linked automatically the first time they launch via SSO with `identification` set (see above) — or TeTS can bulk-link your accounts from a CSV before cutover; ask your onboarding contact. Filter to one group with `ListUsersOptions.GroupId`.
+
+## Mapping your group ids
+
+`client.Groups.ListAsync()` lists every group in the organization. Each row carries the platform `GroupId` and `LegacyGroupId`, the group id you already hold from the legacy platform. `LegacyGroupId` is the same in staging and production, so one lookup keyed on it resolves your existing ids in either environment, and moving from staging to production needs no id list from TeTS.
+
+Two things differ from the legacy platform. The top group you held for a customer may sit one level below the organization here: the organization root is its own row (`IsOrganizationRoot = true`, `AcceptsMembers = false`) and cannot receive members, so place staff in the groups beneath it. And groups a customer creates on TeTS have a null `LegacyGroupId`; use `ParentGroupId` to see where they sit.
 
 ## Mapping your course catalog
 

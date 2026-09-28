@@ -4,7 +4,7 @@ info:
   version: 1.1.0
   description: |
     REST API for integrator user provisioning, profile updates, completions
-    reporting, catalog export, and SSO launch.
+    reporting, catalog export, group directory, and SSO launch.
 
     ## Authentication
     Authenticate every request with an API key issued by TeTS, sent either as
@@ -39,6 +39,7 @@ tags:
   - name: Users
   - name: Reports
   - name: Catalog
+  - name: Groups
   - name: SSO
   - name: Health
 paths:
@@ -553,6 +554,55 @@ paths:
                       limit: 200
                       hasMore: false
                       nextCursor: null
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
+  /api/integrations/v1/groups:
+    get:
+      tags: [Groups]
+      summary: List groups in the organization (paginated)
+      description: |
+        Lists every group in the resolved organization, so you can discover the
+        group ids that `groupIds` (user create/update) and the users/list
+        `groupId` filter take. Groups added later appear on the next call, so
+        poll this list rather than storing ids you were sent by hand. The
+        organization root group is listed (its `groupId` is the organization
+        tenant id) with `acceptsMembers: false`: it is record-only and
+        membership adds reject it. `legacyGroupId` is the group's id on the
+        legacy platform for migrated groups, and null for groups created on
+        TeTS. Rows are ordered by `groupId`; follow `pagination.nextCursor`
+        until `hasMore` is false.
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          description: Page size (default 200, max 1000).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 200
+        - in: query
+          name: cursor
+          required: false
+          description: Opaque cursor from a previous response's pagination.nextCursor.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/TenantHeader"
+        - $ref: "#/components/parameters/TenantQuery"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupListResponse"
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1251,5 +1301,46 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CatalogItem"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+    GroupItem:
+      type: object
+      required: [groupId, name, parentGroupId, isOrganizationRoot, acceptsMembers, legacyGroupId, createdAt, updatedAt]
+      properties:
+        groupId:
+          type: string
+          format: uuid
+          description: Platform group id; the value groupIds and the users/list groupId filter take.
+        name:
+          type: string
+        parentGroupId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Parent group id; null for the organization root.
+        isOrganizationRoot:
+          type: boolean
+          description: True for the organization root group, whose groupId is the organization tenant id.
+        acceptsMembers:
+          type: boolean
+          description: False for the organization root, which is record-only and cannot receive members.
+        legacyGroupId:
+          type: string
+          nullable: true
+          description: Group id on the legacy platform for migrated groups; null for groups created on TeTS.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    GroupListResponse:
+      type: object
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/GroupItem"
         pagination:
           $ref: "#/components/schemas/Pagination"
