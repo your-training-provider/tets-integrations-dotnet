@@ -29,13 +29,23 @@ public sealed class SsoLaunchRequest
     public string? Organization { get; set; }
     /// <summary>JIT-provisioning profile field: the learner's job title.</summary>
     public string? JobTitle { get; set; }
-    /// <summary>Legacy numeric course ID to launch directly into.</summary>
+    /// <summary>
+    /// Course to launch directly into: the catalog's <c>LegacyCourseId</c>, product id, or SKU. As of
+    /// server contract 1.1.0, a value no course carries is retried as a program id (a program's
+    /// <c>LegacyProgramId</c>, product id, or SKU) and the launch then behaves exactly like
+    /// <see cref="ProgramId"/>; when a course and a program share a legacy id the course wins, so use
+    /// <see cref="ProgramId"/> to reach the program.
+    /// </summary>
     public string? CourseId { get; set; }
     /// <summary>Display name of the course identified by <see cref="CourseId"/>, for JIT provisioning.</summary>
     public string? CourseName { get; set; }
     /// <summary>Legacy numeric content ID within the course to launch directly into.</summary>
     public string? ContentId { get; set; }
-    /// <summary>Legacy numeric program ID to launch directly into.</summary>
+    /// <summary>
+    /// Program to launch: the catalog's <c>LegacyProgramId</c>, product id, or SKU. Assigns the program and
+    /// its child courses, then lands on the learner's training list with the program open. A course target
+    /// takes precedence when both <see cref="CourseId"/> and this resolve.
+    /// </summary>
     public string? ProgramId { get; set; }
     /// <summary>Display name of the program identified by <see cref="ProgramId"/>, for JIT provisioning.</summary>
     public string? ProgramName { get; set; }

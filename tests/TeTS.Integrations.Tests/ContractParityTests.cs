@@ -34,6 +34,7 @@ public class ContractParityTests
         "get /api/integrations/v1/users/list",
         "get /api/integrations/v1/reports/completions",
         "get /api/integrations/v1/catalog",
+        "get /api/integrations/v1/groups",
         "get /api/integrations/v1/sso",            // browser redirect — covered by SsoUrlBuilder
     };
 
@@ -57,6 +58,8 @@ public class ContractParityTests
         ["CatalogProgramCourse"] = typeof(CatalogProgramCourse),
         ["CatalogItem"] = typeof(CatalogItem),
         ["CatalogListResponse"] = typeof(CatalogListResponse),   // internal envelope, visible via InternalsVisibleTo
+        ["GroupItem"] = typeof(GroupItem),
+        ["GroupListResponse"] = typeof(GroupListResponse),   // internal envelope, visible via InternalsVisibleTo
         ["ErrorDetail"] = typeof(ErrorDetail),
         // Error: consumed internally, surfaced via TetsApiException — checked by name below
     };

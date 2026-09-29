@@ -90,6 +90,21 @@ await Step("6. catalog (first page)", async () =>
         : $"saw {seen} item(s); first: title={first.Title} legacyCourseId={first.LegacyCourseId?.ToString() ?? "(null)"}";
 });
 
+// 6b. groups (first page of the group directory; stop after 25 — call shape is the test)
+await Step("6b. groups (first page)", async () =>
+{
+    var seen = 0;
+    GroupItem? first = null;
+    await foreach (var group in client.Groups.ListAsync())
+    {
+        first ??= group;
+        if (++seen >= 25) break;
+    }
+    return first is null
+        ? "0 groups visible to this connection"
+        : $"saw {seen} group(s); first: name={first.Name} legacyGroupId={first.LegacyGroupId ?? "(null)"} acceptsMembers={first.AcceptsMembers}";
+});
+
 // 7. SSO launch URL (printed for manual browser verification)
 await Step("7. SSO launch URL", () =>
 {

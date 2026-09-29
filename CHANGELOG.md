@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.2.0-beta.1 — 2026-09-29
 
+- **Groups.ListAsync** (new, minor): wraps `GET /api/integrations/v1/groups`, the organization's group directory, auto-paginated via cursor. Each `GroupItem` carries `GroupId` (the value `GroupIds` and the `Users.ListAsync` group filter take), `Name`, `ParentGroupId`, `IsOrganizationRoot`, `AcceptsMembers` (false for the organization root, which cannot receive members), `LegacyGroupId` (the group's id on the legacy platform, identical across environments; null for groups created on TeTS), `CreatedAt` and `UpdatedAt`. Uses the `users:read` scope. The smoke test gains a group directory step.
+- **Self-identifying completion records** (contract 1.1.0, minor): `CompletionRecord` gains `ProductId` and `ProductType` (join to `CatalogItem` for every product type) and `LegacyProgramId`. A finished program now reports as one row per child course plus one program row (`ProductType = "program"`, `CourseId = null`, `LegacyProgramId` set, `CourseName` = program title, `Code` = program SKU). The three properties are nullable and stay null against servers that predate contract 1.1.0.
+- **Program completion rule in the catalog** (contract 1.1.0, minor): `CatalogItem` gains `CompletionRule` (`all_required` or `required_count`; null for non-program products) and `RequiredCourseCount` (the "Complete any N of M" number for `required_count` programs; null otherwise). Both stay null against older servers.
+- **SSO program launch docs**: `SsoLaunchRequest.ProgramId` launches a program (legacy id, product id, or SKU) and lands on the learner's training list with the program open; as of contract 1.1.0 a program id passed as `CourseId` also lands on the program when no course carries that id. README and migration guide updated; no signing change.
+- **Contract sync**: `contract/integrations-v1.yaml` refreshed to contract 1.1.0 (the additions above, the group directory operation and its schemas, plus `courseId`/`programId` parameter descriptions and example payloads).
 - **Docs and contract sync (no SDK code change)**: the platform's 2026-09 SSO hardening links `identification` only for a user who is not yet linked and never re-points an id that is on file; a conflict is audited server-side and the launch still signs the user in. Unknown usernames are refused at the launch (create the user with `Users.CreateAsync` first), and accounts with platform or cross-organization privileges cannot launch through SSO. README, migration guide and the `UserListItem.ExternalId` and `SsoLaunchRequest.Identification` doc comments updated; `contract/integrations-v1.yaml` refreshed (parameter and route descriptions only).
 
 ## 1.1.0-beta.1 — 2026-09-04

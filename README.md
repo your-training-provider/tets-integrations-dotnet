@@ -56,15 +56,24 @@ var link = await client.Users.LinkAsync(new LinkUserRequest
 });
 Console.WriteLine(link.Created ? "linked" : "already linked");
 
-// 5. Map your course identifiers (auto-paginated; LegacyCourseId is what completions
-//    emit as courseId and SSO deep links accept as courseId/cid)
+// 5. Map your training identifiers (auto-paginated; LegacyCourseId is what completions
+//    emit as courseId and SSO deep links accept as courseId/cid; programs carry
+//    LegacyProgramId, a CompletionRule, and their child courses)
 await foreach (var item in client.Catalog.ListAsync())
-    Console.WriteLine($"{item.Title}: legacyCourseId={item.LegacyCourseId}");
+    Console.WriteLine($"{item.Title} ({item.ProductType}): productId={item.ProductId} " +
+                      $"legacyCourseId={item.LegacyCourseId} legacyProgramId={item.LegacyProgramId}");
 
-// 6. Poll completions (pagination handled for you)
+// 5b. Discover group ids (auto-paginated). LegacyGroupId is the group id you held on the
+//     legacy platform; AcceptsMembers is false for the organization root.
+await foreach (var group in client.Groups.ListAsync())
+    Console.WriteLine($"{group.Name}: groupId={group.GroupId} legacyGroupId={group.LegacyGroupId} " +
+                      $"parent={group.ParentGroupId} acceptsMembers={group.AcceptsMembers}");
+
+// 6. Poll completions (pagination handled for you). Every row carries ProductId and
+//    ProductType, so a program completion is a row of its own next to its child courses.
 await foreach (var completion in client.Reports.GetCompletionsAsync(
     DateTime.UtcNow.AddDays(-7), DateTime.UtcNow))
-    Console.WriteLine($"{completion.UserName}: {completion.CourseName} @ {completion.CompletedDate}");
+    Console.WriteLine($"{completion.UserName}: {completion.CourseName} [{completion.ProductType}] @ {completion.CompletedDate}");
 
 // 7. Deactivate a learner who left
 await client.Users.DeactivateAsync("your-stable-staff-id");
@@ -78,6 +87,20 @@ await client.Users.DeactivateAsync("your-stable-staff-id");
 
 In roster results (`Users.ListAsync`), `ExternalId` is `null` for accounts that exist on the platform but aren't linked to your integration yet — typically accounts migrated from a legacy platform. Link them with `Users.LinkAsync`; an unlinked user is also linked automatically the first time they launch via SSO with `identification` set (the launch never re-points an id that is already on file), or TeTS can bulk-link a whole organization from a CSV before cutover; see [docs/migrating-from-topyx.md](https://github.com/your-training-provider/tets-integrations-dotnet/blob/main/docs/migrating-from-topyx.md) for the full migration story.
 
+## Groups
+
+`Groups.ListAsync` lists every group in the organization, so you never need a list of group ids from TeTS. Each `GroupItem` carries:
+
+| Property | Meaning |
+|---|---|
+| `GroupId` | The id `CreateUserRequest.GroupIds`, `UpdateUserRequest.GroupIds`, and `ListUsersOptions.GroupId` take. |
+| `LegacyGroupId` | The group's id on the legacy platform (migrated groups). It is the same in staging and production, so resolve the ids you already hold through it. `null` for groups created on TeTS. |
+| `ParentGroupId` | The parent group; `null` for the organization root. |
+| `IsOrganizationRoot` | `true` for the organization root, whose `GroupId` is the organization tenant id. |
+| `AcceptsMembers` | `false` for the organization root, which cannot receive members. Only send ids where this is `true` in `GroupIds`. |
+
+Group ids differ between environments, and customers add groups over time. Look groups up at run time (on a schedule, or before provisioning) instead of storing a fixed list. The call needs the `users:read` scope and requires server contract 1.1.0 with the group directory.
+
 ## Smoke test
 
 The fastest way to verify your staging credentials end-to-end is the bundled smoke test — run it before writing any code:
@@ -86,7 +109,7 @@ The fastest way to verify your staging credentials end-to-end is the bundled smo
 dotnet run --project samples/TeTS.SmokeTest
 ```
 
-Run this against your staging credentials as onboarding step one. It exercises `ping`, `users/exists`, user creation, lookup by `externalId`, listing the user roster, the catalog export, an SSO launch URL (if configured), completions polling, and deactivation — printing `TetsApiException.RequestId` on any failure so you can hand it straight to TeTS (see [Getting help](#getting-help)). It creates exactly one disposable test user and deactivates it at the end; the API deliberately has no delete endpoint, so deactivation is the cleanup step.
+Run this against your staging credentials as onboarding step one. It exercises `ping`, `users/exists`, user creation, lookup by `externalId`, listing the user roster, the catalog export, the group directory, an SSO launch URL (if configured), completions polling, and deactivation — printing `TetsApiException.RequestId` on any failure so you can hand it straight to TeTS (see [Getting help](#getting-help)). It creates exactly one disposable test user and deactivates it at the end; the API deliberately has no delete endpoint, so deactivation is the cleanup step.
 
 | Variable | Required | Purpose |
 |---|---|---|
@@ -149,6 +172,16 @@ Console.WriteLine(launchUrl.AbsoluteUri);
 
 Redirect the learner's browser to the returned URL.
 
+`CourseId` takes the catalog's `LegacyCourseId`, product id, or SKU. `ProgramId` launches a program instead: it takes the catalog's `LegacyProgramId`, product id, or SKU, assigns the program and its child courses, and lands on the learner's training list with the program open. As of server contract 1.1.0 a program's id passed as `CourseId` also lands on the program (the server retries a value no course carries as a program id), which keeps single-slot legacy launchers working; when a course and a program share a legacy id the course wins, so use `ProgramId` to reach the program.
+
+```csharp
+var programUrl = client.Sso.BuildLaunchUrl(new SsoLaunchRequest
+{
+    UserName = "casey.lee",
+    ProgramId = "445",   // CatalogItem.LegacyProgramId
+});
+```
+
 ### Embedding the player in an iframe
 
 Set `Embed = true` and `EmbedOrigin` to your application's exact origin:
@@ -207,7 +240,7 @@ var exists = await client.Users.CheckExistsAsync("casey.lee",
     organizationTenantId: ping.OrganizationTenantId);
 ```
 
-Every `Users`, `Reports`, and `Catalog` method takes an optional `organizationTenantId` parameter that overrides `TetsOptions.OrganizationTenantId` for that one call (`Users.ListAsync` and `Catalog.ListAsync` take it on their options types, e.g. `ListUsersOptions.OrganizationTenantId`).
+Every `Users`, `Reports`, `Catalog`, and `Groups` method takes an optional `organizationTenantId` parameter that overrides `TetsOptions.OrganizationTenantId` for that one call (`Users.ListAsync`, `Catalog.ListAsync`, and `Groups.ListAsync` take it on their options types, e.g. `ListUsersOptions.OrganizationTenantId`).
 
 SSO launch URLs need the same scoping: set `SsoLaunchRequest.OrganizationTenantId` when your integration serves multiple organizations.
 
@@ -258,7 +291,7 @@ catch (TetsApiException ex)
 | `InternalError` | Unexpected server error. | **Retried automatically** by the SDK. Report the `RequestId` (see [Getting help](#getting-help)) if it persists. |
 | `FeatureDisabled` | The Integrations API is disabled on this environment. | **Retried automatically** by the SDK (it's a 5xx), but won't succeed until TeTS re-enables it — see [Getting help](#getting-help) if it persists. |
 | `Unknown` | A code this SDK version doesn't recognize yet (forward compatibility). | Treat the HTTP status code as authoritative — the SDK still retries it automatically when the status is 429 or 5xx. |
-| `PaginationStalled` | Client-side only, never sent by the server: an auto-paginating call (`Reports.GetCompletionsAsync`, `Users.ListAsync`, `Catalog.ListAsync`) aborted because the server returned the same pagination cursor twice in a row. | Not retried — report the `RequestId`, if any, and the call parameters to TeTS (see [Getting help](#getting-help)). |
+| `PaginationStalled` | Client-side only, never sent by the server: an auto-paginating call (`Reports.GetCompletionsAsync`, `Users.ListAsync`, `Catalog.ListAsync`, `Groups.ListAsync`) aborted because the server returned the same pagination cursor twice in a row. | Not retried — report the `RequestId`, if any, and the call parameters to TeTS (see [Getting help](#getting-help)). |
 
 Transport-level failures — no response ever received, e.g. DNS failure, connection refused, or a client-side timeout — surface as `HttpRequestException` or `TaskCanceledException`, not `TetsApiException`, which is reserved for responses the server actually sent.
 
