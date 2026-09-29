@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0-beta.1 — 2026-09-29
 
 - **Groups.ListAsync** (new, minor): wraps `GET /api/integrations/v1/groups`, the organization's group directory, auto-paginated via cursor. Each `GroupItem` carries `GroupId` (the value `GroupIds` and the `Users.ListAsync` group filter take), `Name`, `ParentGroupId`, `IsOrganizationRoot`, `AcceptsMembers` (false for the organization root, which cannot receive members), `LegacyGroupId` (the group's id on the legacy platform, identical across environments; null for groups created on TeTS), `CreatedAt` and `UpdatedAt`. Uses the `users:read` scope. The smoke test gains a group directory step.
 - **Self-identifying completion records** (contract 1.1.0, minor): `CompletionRecord` gains `ProductId` and `ProductType` (join to `CatalogItem` for every product type) and `LegacyProgramId`. A finished program now reports as one row per child course plus one program row (`ProductType = "program"`, `CourseId = null`, `LegacyProgramId` set, `CourseName` = program title, `Code` = program SKU). The three properties are nullable and stay null against servers that predate contract 1.1.0.
