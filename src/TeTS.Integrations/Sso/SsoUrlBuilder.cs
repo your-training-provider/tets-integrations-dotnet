@@ -4,20 +4,52 @@ using System.Text;
 
 namespace TeTS.Integrations.Sso;
 
-/// <summary>Builds signed SSO launch URLs (legacy Topyx-compatible MD5 signature scheme).</summary>
+/// <summary>The scheme an SSO launch signature is computed with.</summary>
+public enum SsoSignatureAlgorithm
+{
+    /// <summary>
+    /// HMAC-SHA256 keyed with the SSO secret over <c>username + sessionTimeOut + timestamp</c>,
+    /// lowercase hex (64 characters). The scheme every launch should use; FIPS-approved.
+    /// </summary>
+    HmacSha256 = 0,
+
+    /// <summary>
+    /// The legacy Topyx scheme, <c>MD5(secret + username + sessionTimeOut + timestamp)</c>, lowercase
+    /// hex (32 characters). Accepted by the platform only until it is retired for your integration;
+    /// do not sign new launches with it. Unavailable on FIPS-enforced hosts.
+    /// </summary>
+    LegacyMd5 = 1,
+}
+
+/// <summary>Builds signed SSO launch URLs (HMAC-SHA256 by default; the legacy MD5 scheme on request).</summary>
 public sealed class SsoUrlBuilder
 {
     private readonly string _baseUrl;
     private readonly string _integrationSlug;
     private readonly string _secret;
+    private readonly SsoSignatureAlgorithm _algorithm;
 
-    /// <summary>Constructs a builder bound to one integration's base URL, slug, and SSO secret.</summary>
+    /// <summary>Constructs a builder bound to one integration's base URL, slug, and SSO secret, signing with HMAC-SHA256.</summary>
     /// <param name="baseUrl">Absolute https origin of the platform, no path/query/fragment, e.g. https://courses.example.com. http is accepted only for loopback hosts (localhost, 127.0.0.1, ::1) during local development.</param>
     /// <param name="integrationSlug">Your integration's slug, sent as the <c>integration</c> query parameter.</param>
     /// <param name="ssoSecret">Your integration's SSO signing secret. ASCII only; never echoed in exception messages.</param>
     /// <exception cref="ArgumentException"><paramref name="baseUrl"/> is missing, not an absolute https (or loopback http) URL, or contains a query/fragment; or <paramref name="integrationSlug"/> or <paramref name="ssoSecret"/> is missing or non-ASCII.</exception>
     public SsoUrlBuilder(string baseUrl, string integrationSlug, string ssoSecret)
+        : this(baseUrl, integrationSlug, ssoSecret, SsoSignatureAlgorithm.HmacSha256)
     {
+    }
+
+    /// <summary>Constructs a builder bound to one integration's base URL, slug, and SSO secret, signing with the given scheme.</summary>
+    /// <param name="baseUrl">Absolute https origin of the platform, no path/query/fragment, e.g. https://courses.example.com. http is accepted only for loopback hosts (localhost, 127.0.0.1, ::1) during local development.</param>
+    /// <param name="integrationSlug">Your integration's slug, sent as the <c>integration</c> query parameter.</param>
+    /// <param name="ssoSecret">Your integration's SSO signing secret. ASCII only; never echoed in exception messages.</param>
+    /// <param name="algorithm">The signature scheme. Use <see cref="SsoSignatureAlgorithm.LegacyMd5"/> only to keep an integration on MD5 for a transition period.</param>
+    /// <exception cref="ArgumentException"><paramref name="baseUrl"/> is missing, not an absolute https (or loopback http) URL, or contains a query/fragment; or <paramref name="integrationSlug"/> or <paramref name="ssoSecret"/> is missing or non-ASCII; or <paramref name="algorithm"/> is not a defined value.</exception>
+    public SsoUrlBuilder(string baseUrl, string integrationSlug, string ssoSecret, SsoSignatureAlgorithm algorithm)
+    {
+        if (!Enum.IsDefined(typeof(SsoSignatureAlgorithm), algorithm))
+            throw new ArgumentException("algorithm must be HmacSha256 or LegacyMd5.", nameof(algorithm));
+        _algorithm = algorithm;
         if (string.IsNullOrWhiteSpace(baseUrl)) throw new ArgumentException("baseUrl is required.", nameof(baseUrl));
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri)
             || (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
@@ -42,26 +74,45 @@ public sealed class SsoUrlBuilder
     }
 
     /// <summary>
-    /// MD5(secret + username + sessionTimeOut + timestamp), lowercase hex — byte-identical to the
-    /// server implementation. All inputs must be ASCII; non-ASCII throws (the server's legacy
-    /// encoding is not representable portably, so we fail loudly instead of signing wrongly). The
-    /// <paramref name="secret"/>'s non-ASCII characters are never echoed in the exception message,
-    /// to avoid leaking secret material into partner logs; other inputs may safely name the
-    /// offending field and character.
+    /// HMAC-SHA256(key = secret, message = username + sessionTimeOut + timestamp), lowercase hex
+    /// (64 characters) — byte-identical to the server implementation. The three values are
+    /// concatenated in that order with nothing between them, exactly as in the legacy scheme; only
+    /// the hash changes. All inputs must be ASCII; non-ASCII throws. The <paramref name="secret"/>'s
+    /// non-ASCII characters are never echoed in the exception message, to avoid leaking secret
+    /// material into partner logs; other inputs may safely name the offending field and character.
     /// </summary>
     /// <remarks>
-    /// Requires the legacy MD5 algorithm for server-compatible signing; on FIPS-enforced
-    /// Windows/.NET Framework hosts, MD5 may be unavailable and this throws
-    /// <see cref="InvalidOperationException"/> — see the SDK README's FIPS section. The server also
-    /// enforces a ~5-minute (±300 s) max age on the signed timestamp, so build and use launch URLs
-    /// at click time rather than caching or batching them.
+    /// The server enforces a ~5-minute (±300 s) max age on the signed timestamp, so build and use
+    /// launch URLs at click time rather than caching or batching them. HMAC-SHA256 is available on
+    /// FIPS-enforced hosts.
     /// </remarks>
     public static string ComputeSignature(string secret, string username, string sessionTimeOutSeconds, string timestamp)
-        => ComputeSignatureCore(secret, username, sessionTimeOutSeconds, timestamp, MD5.Create);
+        => ComputeSignature(secret, username, sessionTimeOutSeconds, timestamp, SsoSignatureAlgorithm.HmacSha256);
+
+    /// <summary>Computes the launch signature with the given scheme; see <see cref="ComputeSignature(string, string, string, string)"/>.</summary>
+    /// <exception cref="InvalidOperationException"><see cref="SsoSignatureAlgorithm.LegacyMd5"/> on a host where MD5 is unavailable (FIPS-enforced mode) — see the SDK README's FIPS section.</exception>
+    public static string ComputeSignature(
+        string secret, string username, string sessionTimeOutSeconds, string timestamp, SsoSignatureAlgorithm algorithm)
+    {
+        if (algorithm == SsoSignatureAlgorithm.LegacyMd5)
+            return ComputeSignatureCore(secret, username, sessionTimeOutSeconds, timestamp, MD5.Create);
+        if (algorithm != SsoSignatureAlgorithm.HmacSha256)
+            throw new ArgumentException("algorithm must be HmacSha256 or LegacyMd5.", nameof(algorithm));
+
+        RequireAscii(secret, "secret", echoChar: false);
+        RequireAscii(username, "username", echoChar: true);
+        RequireAscii(sessionTimeOutSeconds, "sessionTimeOutSeconds", echoChar: true);
+        RequireAscii(timestamp, "timestamp", echoChar: true);
+
+        var message = username + sessionTimeOutSeconds + timestamp;
+        using var hmac = new HMACSHA256(Encoding.ASCII.GetBytes(secret));
+        return ToLowerHex(hmac.ComputeHash(Encoding.ASCII.GetBytes(message)));
+    }
 
     /// <summary>
-    /// Test seam for <see cref="ComputeSignature"/>: takes an injectable MD5 factory so FIPS-unavailable
-    /// behavior can be exercised without a real FIPS-enforced host. Not part of the public API.
+    /// The legacy MD5 scheme, <c>MD5(secret + username + sessionTimeOut + timestamp)</c>. Test seam:
+    /// takes an injectable MD5 factory so FIPS-unavailable behavior can be exercised without a real
+    /// FIPS-enforced host. Not part of the public API.
     /// </summary>
     internal static string ComputeSignatureCore(
         string secret, string username, string sessionTimeOutSeconds, string timestamp, Func<MD5> md5Factory)
@@ -88,11 +139,15 @@ public sealed class SsoUrlBuilder
 
         using (md5)
         {
-            var hash = md5.ComputeHash(Encoding.ASCII.GetBytes(payload));
-            var sb = new StringBuilder(hash.Length * 2);
-            foreach (var b in hash) sb.Append(b.ToString("x2"));
-            return sb.ToString();
+            return ToLowerHex(md5.ComputeHash(Encoding.ASCII.GetBytes(payload)));
         }
+    }
+
+    private static string ToLowerHex(byte[] hash)
+    {
+        var sb = new StringBuilder(hash.Length * 2);
+        foreach (var b in hash) sb.Append(b.ToString("x2"));
+        return sb.ToString();
     }
 
     private static void RequireAscii(string value, string fieldName, bool echoChar)
@@ -112,9 +167,9 @@ public sealed class SsoUrlBuilder
     /// Interpolate the result with <see cref="Uri.AbsoluteUri"/>, not the bare <c>ToString()</c> —
     /// <c>Uri.ToString()</c> un-escapes reserved characters and can hand the learner's browser a
     /// malformed URL. The server enforces a ~5-minute (±300 s) max age on the signed timestamp, so
-    /// build this URL at click time rather than caching or batching it for later use. On
-    /// FIPS-enforced Windows/.NET Framework hosts, MD5 (required for server-compatible signing) may
-    /// be unavailable — see the SDK README's FIPS section.
+    /// build this URL at click time rather than caching or batching it for later use. A builder
+    /// constructed with <see cref="SsoSignatureAlgorithm.LegacyMd5"/> needs MD5, which may be
+    /// unavailable on FIPS-enforced Windows/.NET Framework hosts — see the SDK README's FIPS section.
     /// </remarks>
     /// <param name="request">The launch parameters. <see cref="SsoLaunchRequest.UserName"/> is required.</param>
     /// <exception cref="ArgumentNullException"><paramref name="request"/> is null.</exception>
@@ -147,7 +202,7 @@ public sealed class SsoUrlBuilder
         var timestamp = (request.TimestampOverride ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds())
             .ToString(CultureInfo.InvariantCulture);
         var timeout = request.SessionTimeOutSeconds.ToString(CultureInfo.InvariantCulture);
-        var signature = ComputeSignature(_secret, username, timeout, timestamp);
+        var signature = ComputeSignature(_secret, username, timeout, timestamp, _algorithm);
 
         var pairs = new List<KeyValuePair<string, string?>>
         {

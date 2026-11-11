@@ -7,18 +7,64 @@ namespace TeTS.Integrations.Tests;
 
 public class SsoTests
 {
-    // Vectors generated from the platform's server-side SSO implementation on 2026-08-14.
+    // HMAC-SHA256 vectors generated from the platform's server-side SSO implementation on 2026-11-11.
+    [Theory]
+    [InlineData("test-secret", "casey.lee", "28800", "1783332000", "becade085f135eb39e21b91e2717cec289c41e872c735e2b58e25fd2e3856ec8")]
+    [InlineData("partner-staging-secret", "user with spaces", "28800", "1786500000", "916c5806a0672d89c86e79426bd40da268f433a6aec72f2067ca91bb290a90af")]
+    public void SignatureMatchesServerImplementation(string secret, string username, string timeout, string ts, string expected)
+    {
+        Assert.Equal(expected, SsoUrlBuilder.ComputeSignature(secret, username, timeout, ts));
+        Assert.Equal(expected, SsoUrlBuilder.ComputeSignature(secret, username, timeout, ts, SsoSignatureAlgorithm.HmacSha256));
+    }
+
+    // Legacy MD5 vectors generated from the platform's server-side SSO implementation on 2026-08-14.
     [Theory]
     [InlineData("test-secret", "casey.lee", "28800", "1783332000", "63d7f0a4afedbc795496be859a186c9f")]
     [InlineData("partner-staging-secret", "user with spaces", "28800", "1786500000", "cc00ef52963116b1e2aefb17ce0684ff")]
-    public void SignatureMatchesServerImplementation(string secret, string username, string timeout, string ts, string expected)
-        => Assert.Equal(expected, SsoUrlBuilder.ComputeSignature(secret, username, timeout, ts));
+    public void LegacyMd5SignatureMatchesServerImplementation(string secret, string username, string timeout, string ts, string expected)
+        => Assert.Equal(expected, SsoUrlBuilder.ComputeSignature(secret, username, timeout, ts, SsoSignatureAlgorithm.LegacyMd5));
 
     [Fact]
-    public void NonAsciiInput_ThrowsInsteadOfDiverging()
+    public void ComputeSignature_UndefinedAlgorithm_Throws()
     {
         var ex = Assert.Throws<ArgumentException>(() =>
-            SsoUrlBuilder.ComputeSignature("secret", "maría.gonzález", "28800", "1783332000"));
+            SsoUrlBuilder.ComputeSignature("secret", "casey.lee", "28800", "1783332000", (SsoSignatureAlgorithm)42));
+        Assert.Equal("algorithm", ex.ParamName);
+    }
+
+    [Fact]
+    public void Constructor_UndefinedAlgorithm_Throws()
+    {
+        var ex = Assert.Throws<ArgumentException>(() =>
+            new SsoUrlBuilder("https://courses.example.com", "acme", "secret", (SsoSignatureAlgorithm)42));
+        Assert.Equal("algorithm", ex.ParamName);
+    }
+
+    [Fact]
+    public void BuildLaunchUrl_LegacyMd5Builder_SignsWithMd5()
+    {
+        var builder = new SsoUrlBuilder("https://courses.example.com/", "acme", "test-secret", SsoSignatureAlgorithm.LegacyMd5);
+        var uri = builder.BuildLaunchUrl(new SsoLaunchRequest { UserName = "casey.lee", SessionTimeOutSeconds = 3600, TimestampOverride = 1783332000 });
+        var q = HttpUtility.ParseQueryString(uri.Query);
+        Assert.Equal(32, q["signature"]!.Length);
+        Assert.Equal(SsoUrlBuilder.ComputeSignature("test-secret", "casey.lee", "3600", "1783332000", SsoSignatureAlgorithm.LegacyMd5), q["signature"]);
+    }
+
+    [Fact]
+    public void BuildLaunchUrl_DefaultBuilder_SignsWithHmacSha256()
+    {
+        var uri = Builder().BuildLaunchUrl(new SsoLaunchRequest { UserName = "casey.lee", SessionTimeOutSeconds = 3600, TimestampOverride = 1783332000 });
+        var q = HttpUtility.ParseQueryString(uri.Query);
+        Assert.Equal(64, q["signature"]!.Length);
+    }
+
+    [Theory]
+    [InlineData(SsoSignatureAlgorithm.HmacSha256)]
+    [InlineData(SsoSignatureAlgorithm.LegacyMd5)]
+    public void NonAsciiInput_ThrowsInsteadOfDiverging(SsoSignatureAlgorithm algorithm)
+    {
+        var ex = Assert.Throws<ArgumentException>(() =>
+            SsoUrlBuilder.ComputeSignature("secret", "maría.gonzález", "28800", "1783332000", algorithm));
         // Non-secret inputs may safely echo the offending character and name the field.
         Assert.Contains("username", ex.Message);
         Assert.Contains("í", ex.Message);
@@ -104,7 +150,7 @@ public class SsoTests
         Assert.Equal("casey.lee", q["username"]);
         Assert.Equal("1783332000", q["timestamp"]);
         Assert.Equal("28800", q["sessionTimeOut"]);  // default = 8h max
-        Assert.Equal("63d7f0a4afedbc795496be859a186c9f", q["signature"]);
+        Assert.Equal("becade085f135eb39e21b91e2717cec289c41e872c735e2b58e25fd2e3856ec8", q["signature"]);  // HMAC-SHA256 by default
         Assert.Null(q["courseId"]);                  // unset optionals omitted
         Assert.Null(q["embed"]);
     }
@@ -146,7 +192,7 @@ public class SsoTests
         { UserName = "casey.lee ", TimestampOverride = 1783332000 }).ToString();
         var q = HttpUtility.ParseQueryString(new Uri(url).Query);
         Assert.Equal("casey.lee", q["username"]);
-        Assert.Equal("63d7f0a4afedbc795496be859a186c9f", q["signature"]);
+        Assert.Equal("becade085f135eb39e21b91e2717cec289c41e872c735e2b58e25fd2e3856ec8", q["signature"]);  // HMAC-SHA256 by default
     }
 
     [Fact]
