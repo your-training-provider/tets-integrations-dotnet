@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0-beta.1 — unreleased
+
+- **HMAC-SHA256 SSO signatures** (minor; resolves [#7](https://github.com/your-training-provider/tets-integrations-dotnet/issues/7)): `SsoUrlBuilder` now signs launch URLs with `HMAC-SHA256(key = ssoSecret, message = username + sessionTimeOut + timestamp)`, lowercase hex, by default. The three fields and their order are unchanged; only the hash is. The platform accepts this alongside the legacy MD5 scheme and tells them apart by length, so existing links keep working while you upgrade. New `SsoSignatureAlgorithm` enum, a four-argument `SsoUrlBuilder` constructor and a five-argument `ComputeSignature` overload take the scheme; `SsoSignatureAlgorithm.LegacyMd5` keeps an integration on MD5 for a transition period. HMAC-SHA256 is FIPS-approved, so the FIPS limitation now applies only to builders constructed with `LegacyMd5`. Requires a platform that accepts HMAC-SHA256 launch signatures (deployed with the server change of 2026-11).
+
 ## 1.2.0-beta.1 — 2026-09-29
 
 - **Groups.ListAsync** (new, minor): wraps `GET /api/integrations/v1/groups`, the organization's group directory, auto-paginated via cursor. Each `GroupItem` carries `GroupId` (the value `GroupIds` and the `Users.ListAsync` group filter take), `Name`, `ParentGroupId`, `IsOrganizationRoot`, `AcceptsMembers` (false for the organization root, which cannot receive members), `LegacyGroupId` (the group's id on the legacy platform, identical across environments; null for groups created on TeTS), `CreatedAt` and `UpdatedAt`. Uses the `users:read` scope. The smoke test gains a group directory step.

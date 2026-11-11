@@ -198,14 +198,26 @@ var embedUrl = client.Sso.BuildLaunchUrl(new SsoLaunchRequest
 
 TeTS must approve `EmbedOrigin` on your connection server-side before an embed launch is issued — see [Getting help](#getting-help) to request it. The builder also validates the *shape* of `EmbedOrigin` at build time (must be `https://host`, or `http://localhost`/`http://127.0.0.1` for local dev; no userinfo, path, query, or fragment) so a malformed origin fails fast in your code instead of at the platform.
 
+### Signature scheme
+
+The launch signature is `HMAC-SHA256(key = ssoSecret, message = username + sessionTimeOut + timestamp)`, lowercase hex (64 characters). The three values are concatenated in that order with nothing between them. `SsoUrlBuilder` signs this way by default.
+
+The legacy Topyx scheme, `MD5(ssoSecret + username + sessionTimeOut + timestamp)` (32 characters), is still accepted by the platform while your integration moves over, and is retired per integration on a date agreed with TeTS; after that an MD5-signed launch is refused. The server tells the two apart by the signature's length, so no extra parameter is needed and both kinds of link can be in flight at once. To keep an integration on MD5 for the transition, construct the builder with `SsoSignatureAlgorithm.LegacyMd5`; do not sign new integrations with it.
+
 ### Cross-checking an existing signer
 
-If you already have a Topyx-style MD5 signer and want to verify it against the SDK, use `ComputeSignature` directly:
+If you have your own signer and want to verify it against the SDK, use `ComputeSignature` directly:
 
 ```csharp
 var signature = SsoUrlBuilder.ComputeSignature(
     secret: "test-secret", username: "casey.lee",
     sessionTimeOutSeconds: "28800", timestamp: "1783332000");
+// => "becade085f135eb39e21b91e2717cec289c41e872c735e2b58e25fd2e3856ec8"
+
+var legacy = SsoUrlBuilder.ComputeSignature(
+    secret: "test-secret", username: "casey.lee",
+    sessionTimeOutSeconds: "28800", timestamp: "1783332000",
+    algorithm: SsoSignatureAlgorithm.LegacyMd5);
 // => "63d7f0a4afedbc795496be859a186c9f"
 ```
 
@@ -217,9 +229,9 @@ The server rejects a signed launch URL once its timestamp is more than about 5 m
 
 ## FIPS-enforced Windows hosts
 
-The SSO signature uses MD5 for byte-for-byte compatibility with the legacy Topyx-era signing scheme — this is a protocol compatibility requirement, not a general-purpose hash choice, and it has no bearing on the REST API's security.
+The default HMAC-SHA256 signature is FIPS-approved and works on FIPS-enforced hosts.
 
-On Windows hosts running .NET Framework with the FIPS security policy enforced, `MD5.Create()` throws, and SSO URL building will fail with an `InvalidOperationException` that names this section. REST API calls (`Users`, `Reports`, `PingAsync`) are unaffected — only `Sso.BuildLaunchUrl` and `Sso.ComputeSignature` depend on MD5. If your servers enforce FIPS mode, see [Getting help](#getting-help) to discuss options before you rely on SSO launch.
+Only a builder constructed with `SsoSignatureAlgorithm.LegacyMd5` depends on MD5. On Windows hosts running .NET Framework with the FIPS security policy enforced, `MD5.Create()` throws, and such a builder fails with an `InvalidOperationException` that names this section. REST API calls (`Users`, `Reports`, `PingAsync`) are unaffected. If your servers enforce FIPS mode, sign with the default scheme.
 
 ## Multi-organization tenants
 

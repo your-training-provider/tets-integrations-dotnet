@@ -9,7 +9,7 @@ The TeTS Integrations API v1 replaces the old SOAP/manual Topyx integration surf
 | Legacy Topyx flow | TeTS replacement |
 |---|---|
 | SOAP / manual user provisioning | `client.Users.CreateAsync(...)` (REST) |
-| Signed Topyx SSO URL (MD5) | `client.Sso.BuildLaunchUrl(...)` — same MD5 scheme, new endpoint `/api/integrations/v1/sso` |
+| Signed Topyx SSO URL (MD5) | `client.Sso.BuildLaunchUrl(...)` — HMAC-SHA256 over the same fields, new endpoint `/api/integrations/v1/sso`; the MD5 scheme is accepted during the transition |
 | Completions report export (SOAP/report) | `client.Reports.GetCompletionsAsync(...)` — cursor-paginated REST |
 | Staff roster export (SOAP/report) | `client.Users.ListAsync(...)` — cursor-paginated REST |
 | Catalog export (SOAP/report) | `client.Catalog.ListAsync(...)` — cursor-paginated REST |
@@ -21,7 +21,7 @@ The TeTS Integrations API v1 replaces the old SOAP/manual Topyx integration surf
 
 - **Endpoint path.** Point your signed launch URLs at `/api/integrations/v1/sso` instead of the legacy Topyx SSO path.
 - **Slug parameter.** Emit `integration=<slug>` instead of `partner=<slug>`. The server still accepts the legacy `partner=` alias, so nothing breaks if you haven't updated it yet — but new integrations should emit `integration=`.
-- **Signature semantics are unchanged.** `username`, `timestamp`, `sessionTimeOut`, and `signature` mean exactly what they meant under Topyx, and the signature is computed the same way: `MD5(secret + username + sessionTimeOut + timestamp)`, lowercase hex.
+- **Signature fields are unchanged; the hash is not.** `username`, `timestamp`, `sessionTimeOut`, and `signature` mean exactly what they meant under Topyx. The signature is now `HMAC-SHA256(key = secret, message = username + sessionTimeOut + timestamp)`, lowercase hex, 64 characters: the same three values in the same order, keyed with the same secret. The Topyx scheme, `MD5(secret + username + sessionTimeOut + timestamp)`, is accepted during the transition and retired on a date agreed with TeTS.
 - **`identification` links `externalId` on the first launch.** If you pass `identification` for a user who is not yet linked, TeTS links that user to the value as their stable `externalId` — the same field `Users.CreateAsync` and `Users.GetByExternalIdAsync` use. It is never re-pointed: if the value already belongs to another user, or the user already carries a different `externalId`, the launch still signs the user in and leaves the link unchanged (TeTS audits the difference; `Users.ListAsync` shows what is on file, and `Users.LinkAsync` refuses the same conflicts with a 409, so ask your onboarding contact to correct one). The launch does not create accounts: an unknown username is refused, so create the user with `Users.CreateAsync` first. Use the same value you'd otherwise pass to `CreateAsync`'s `ExternalId`.
 - **Multi-organization partners** should add `organizationTenantId` to the launch URL (or set `TetsOptions.OrganizationTenantId`) — required once your connection serves more than one organization.
 - **URLs expire.** A signed launch URL is only valid for about 5 minutes from its `timestamp`. Build it at click time; don't cache or email it.
@@ -74,7 +74,7 @@ Completion rows are self-identifying: every `CompletionRecord` carries `ProductI
 
 ## Signature compatibility
 
-Your existing MD5 signer keeps working — the wire format is byte-for-byte the same as Topyx's. If you want to verify your signer against the SDK's implementation (or you're not ready to adopt the SDK for signing yet and just want a reference), use the static helper:
+Your existing MD5 signer keeps working during the transition: the platform accepts both schemes and tells them apart by the signature's length. Move it to HMAC-SHA256 keyed with the secret over the same `username + sessionTimeOut + timestamp` string; that is the only change. To verify either implementation against the SDK's, use the static helper:
 
 ```csharp
 using TeTS.Integrations.Sso;
@@ -82,6 +82,12 @@ using TeTS.Integrations.Sso;
 var signature = SsoUrlBuilder.ComputeSignature(
     secret: "test-secret", username: "casey.lee",
     sessionTimeOutSeconds: "28800", timestamp: "1783332000");
+// => "becade085f135eb39e21b91e2717cec289c41e872c735e2b58e25fd2e3856ec8"
+
+var legacy = SsoUrlBuilder.ComputeSignature(
+    secret: "test-secret", username: "casey.lee",
+    sessionTimeOutSeconds: "28800", timestamp: "1783332000",
+    algorithm: SsoSignatureAlgorithm.LegacyMd5);
 // => "63d7f0a4afedbc795496be859a186c9f"
 ```
 
