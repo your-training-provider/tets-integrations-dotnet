@@ -35,6 +35,9 @@ public class ContractParityTests
         "get /api/integrations/v1/reports/completions",
         "get /api/integrations/v1/catalog",
         "get /api/integrations/v1/groups",
+        "post /api/integrations/v1/assignments",
+        "get /api/integrations/v1/assignments",
+        "post /api/integrations/{slug}/hire-dates",   // Users.SetHireDatesAsync; inline schemas, see HireDatesInlineSchemasMatchTheirModels
         "get /api/integrations/v1/sso",            // browser redirect — covered by SsoUrlBuilder
     };
 
@@ -60,6 +63,10 @@ public class ContractParityTests
         ["CatalogListResponse"] = typeof(CatalogListResponse),   // internal envelope, visible via InternalsVisibleTo
         ["GroupItem"] = typeof(GroupItem),
         ["GroupListResponse"] = typeof(GroupListResponse),   // internal envelope, visible via InternalsVisibleTo
+        ["CreateAssignmentRequest"] = typeof(CreateAssignmentRequest),
+        ["Assignment"] = typeof(Assignment),
+        ["CreateAssignmentResponse"] = typeof(CreateAssignmentResult),
+        ["AssignmentListResponse"] = typeof(AssignmentListResponse),   // internal envelope, visible via InternalsVisibleTo
         ["ErrorDetail"] = typeof(ErrorDetail),
         // Error: consumed internally, surfaced via TetsApiException — checked by name below
     };
@@ -103,6 +110,39 @@ public class ContractParityTests
                     problems.Add($"{schemaName}.{name} missing on {model.Name}");
             }
         }
+        Assert.True(problems.Count == 0, string.Join("; ", problems));
+    }
+
+    // The hire-dates operation declares its schemas inline rather than under components/schemas.
+    [Fact]
+    public void HireDatesInlineSchemasMatchTheirModels()
+    {
+        YamlMappingNode Map(YamlNode node, params string[] keys)
+        {
+            foreach (var key in keys) node = ((YamlMappingNode)node).Children[new YamlScalarNode(key)];
+            return (YamlMappingNode)node;
+        }
+        var op = Map(LoadRoot(), "paths", "/api/integrations/{slug}/hire-dates", "post");
+        var request = Map(op, "requestBody", "content", "application/json", "schema");
+        var response = Map(op, "responses", "200", "content", "application/json", "schema");
+
+        var problems = new List<string>();
+        void Check(YamlMappingNode schema, Type model)
+        {
+            var wireNames = model.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .Select(p => p.GetCustomAttributes(typeof(JsonPropertyNameAttribute), false)
+                    .Cast<JsonPropertyNameAttribute>().FirstOrDefault()?.Name)
+                .Where(n => n is not null).ToHashSet();
+            foreach (var prop in Map(schema, "properties").Children)
+            {
+                var name = ((YamlScalarNode)prop.Key).Value!;
+                if (!wireNames.Contains(name)) problems.Add($"hire-dates {name} missing on {model.Name}");
+            }
+        }
+        Check(request, typeof(SetHireDatesRequest));
+        Check(Map(request, "properties", "employees", "items"), typeof(HireDateUpdate));
+        Check(response, typeof(SetHireDatesResult));
+        Check(Map(response, "properties", "results", "items"), typeof(HireDateRowResult));
         Assert.True(problems.Count == 0, string.Join("; ", problems));
     }
 

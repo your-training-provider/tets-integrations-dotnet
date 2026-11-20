@@ -12,6 +12,14 @@ namespace TeTS.Integrations.Models;
 /// </summary>
 public sealed class CompletionRecord
 {
+    /// <summary>
+    /// Platform transcript record id: one per completion, the same on every pull of a range that
+    /// includes it, and unchanged when the id the completion is reported under changes (a migrated or
+    /// aliased row). Key stored completions on this rather than on (<see cref="UserId"/>,
+    /// <see cref="CourseId"/>, <see cref="CompletedDate"/>), so re-pulling a range never creates a
+    /// second record. Empty only when the server predates contract 1.2.0.
+    /// </summary>
+    [JsonPropertyName("recordId")] public string RecordId { get; set; } = "";
     /// <summary>Platform username of the learner, when available.</summary>
     [JsonPropertyName("userName")] public string? UserName { get; set; }
     /// <summary>The learner's first name.</summary>
@@ -20,11 +28,18 @@ public sealed class CompletionRecord
     [JsonPropertyName("lastName")] public string LastName { get; set; } = "";
     /// <summary>Title of the completed product; the program title on a program row.</summary>
     [JsonPropertyName("courseName")] public string CourseName { get; set; } = "";
-    /// <summary>Legacy numeric course id when available. Null on program rows (use <see cref="LegacyProgramId"/>).</summary>
+    /// <summary>
+    /// Legacy numeric course id when available. Null on program rows (use <see cref="LegacyProgramId"/>).
+    /// For a completion migrated from Topyx this is the Topyx course id the completion was recorded
+    /// under (the id SSO accepts), even when the platform filed it on a content-identical twin product.
+    /// </summary>
     [JsonPropertyName("courseId")] public int? CourseId { get; set; }
     /// <summary>
-    /// Platform product id of the completed training; joins to <c>CatalogItem.ProductId</c> for every
-    /// product type. Null only when the server predates contract 1.1.0.
+    /// Platform product id of the completed training. For a completion earned on the platform it joins
+    /// to <c>CatalogItem.ProductId</c>; for a completion migrated from Topyx it is the product the
+    /// recorded Topyx id maps to, which the organization's catalog may not list, so key migrated rows
+    /// on <see cref="CourseId"/> / <see cref="LegacyProgramId"/>. Null only when the server predates
+    /// contract 1.1.0.
     /// </summary>
     [JsonPropertyName("productId")] public string? ProductId { get; set; }
     /// <summary>

@@ -20,8 +20,9 @@ public sealed class CatalogItem
     /// <summary>Timestamp the catalog row was last updated.</summary>
     [JsonPropertyName("updatedAt")] public DateTimeOffset UpdatedAt { get; set; }
     /// <summary>
-    /// Legacy numeric course id — the id the completions report emits as <c>courseId</c> and SSO
-    /// accepts as <c>courseId</c>/<c>cid</c>. Null when the product has no legacy course id.
+    /// Numeric course id — the id the completions report emits as <c>courseId</c> and SSO accepts as
+    /// <c>courseId</c>/<c>cid</c>. A Topyx id for a migrated course; a TeTS number (six digits from
+    /// 100000) for a course built in TeTS, so the two never collide. Null only for classes.
     /// </summary>
     [JsonPropertyName("legacyCourseId")] public int? LegacyCourseId { get; set; }
     /// <summary>

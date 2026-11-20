@@ -1,10 +1,17 @@
 openapi: 3.0.3
 info:
   title: TeTS Integrations API
-  version: 1.1.0
+  version: 1.3.0
   description: |
-    REST API for integrator user provisioning, profile updates, completions
-    reporting, catalog export, group directory, and SSO launch.
+    REST API for integrator user provisioning, profile updates, training
+    assignment and status, completions reporting, catalog export, group
+    directory, and SSO launch.
+
+    An organization can use this API for its own systems, with no partner
+    involved: a manager turns on API access in Settings > API access and
+    generates a key (shown once). Such a key can create learners, assign the
+    courses and programs the organization carries (under the seats it bought),
+    and read each assignment's status.
 
     ## Authentication
     Authenticate every request with an API key issued by TeTS, sent either as
@@ -37,6 +44,7 @@ security:
 tags:
   - name: Documentation
   - name: Users
+  - name: Assignments
   - name: Reports
   - name: Catalog
   - name: Groups
@@ -89,6 +97,37 @@ paths:
         response is replayed for 24h. Reusing a key with a different body
         returns `422 IDEMPOTENCY_KEY_REUSED`; concurrent requests with the same
         key return `409 IDEMPOTENCY_REQUEST_IN_FLIGHT`.
+
+        Under a connection-scoped key an `email` already used by any other
+        account, in your organization or elsewhere, does not block the create: a
+        separate account is created (facility staff share inboxes; sign-in is by
+        `userName`).
+
+        A create that names a person who already has an account in your
+        organization links that account instead of duplicating it, and answers
+        `201` with its `userId`: when `userName` is held by an account with the
+        same `email` that is not yet connected to your integration, or when
+        exactly one unconnected account in your organization has the same
+        `email` and the same first and last name. The response's `userName` is
+        the account's own username and `integrationUserName` echoes the one you
+        sent; keep using yours, the SSO launch and `GET /users/exists` resolve
+        it to that account. The account is added only to the `groupIds` you
+        named (never to the connection's default group). A deactivated account
+        with no training history is reactivated and linked; one with history is
+        left for a manager to reactivate (then your next create links it).
+
+        A `409 USERNAME_TAKEN` is returned when the holder of `userName` is
+        outside your organization, has a different email, is already connected
+        to another `externalId`, is deactivated with history, or holds
+        privileges that cannot be connected; the message names which rule
+        applied. Do not retry a `409` with the same body: change `userName`, or
+        link the existing account with `POST /users/link`.
+
+        On a key from an organization's own API access (not a partner's), a
+        create is refused with `403 ORG_BASIC_SUBSCRIPTION_LAPSED` while the
+        organization's Basic subscription has ended, as adding people is in the
+        app, because a create into a group can assign titles. Renew the
+        subscription and retry.
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
         - $ref: "#/components/parameters/TenantHeader"
@@ -190,6 +229,10 @@ paths:
     get:
       tags: [Users]
       summary: Check username availability and integration linkage
+      description: |
+        A `userName` your integration holds for an account that was linked
+        under another platform username (see `POST /users`) answers
+        `exists: true, linkedToIntegration: true` with that account's ids.
       parameters:
         - in: query
           name: userName
@@ -416,7 +459,8 @@ paths:
                     to: "2026-09-30T23:59:59.999Z"
                     count: 2
                     completions:
-                      - userName: "jane.doe"
+                      - recordId: "5d2c8e1a-7f3b-4e9c-a1d6-2b8f0c4e7a93"
+                        userName: "jane.doe"
                         firstName: "Jane"
                         lastName: "Doe"
                         courseName: "CPR Basics"
@@ -435,7 +479,8 @@ paths:
                         email: "jane.doe@example.com"
                         code: "CPR-101"
                         expiresAt: "2028-09-12T15:04:05.000Z"
-                      - userName: "jane.doe"
+                      - recordId: "e7a1f3c9-2b6d-4a8e-9c0f-1d5b7e3a6c28"
+                        userName: "jane.doe"
                         firstName: "Jane"
                         lastName: "Doe"
                         courseName: "DDS Phase 4 10 Hrs"
@@ -472,13 +517,19 @@ paths:
         Lists the resolved organization's training pool, so you can map course
         identifiers for SSO deep links and interpret completion reports.
         `legacyCourseId` is the id the completions report emits as `courseId`
-        and SSO accepts as `courseId`/`cid`; programs deep-link via the SSO
+        and SSO accepts as `courseId`/`cid`: a course migrated from Topyx keeps
+        its Topyx id, and a course built in TeTS (an organization's own SCORM
+        upload, for example) carries its TeTS number, six digits from 100000,
+        so the two never collide; programs deep-link via the SSO
         `programId` parameter using `legacyProgramId` (SSO also accepts it in
         `courseId` when no course carries that id), and program completions
         report it as `legacyProgramId`. `productId` joins to the completions
-        report for every product type. Duplicate titles can
-        appear (legacy twin editions) — completions report whichever twin the
-        learner actually completed. `renewOnly: true` marks superseded
+        report for completions earned on the platform; a completion migrated
+        from Topyx reports the product its recorded Topyx id maps to, which
+        this list may not carry, so join migrated rows on `legacyCourseId` /
+        `legacyProgramId`. Duplicate titles can appear (legacy twin editions)
+        — completions report the twin the learner actually completed, by the
+        Topyx id it was recorded under. `renewOnly: true` marks superseded
         editions kept for interpreting historical completions and renewals —
         do not deep-link them for NEW assignments. Rows are ordered by
         `productId`; follow `pagination.nextCursor` until `hasMore` is false.
@@ -609,13 +660,175 @@ paths:
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/FeatureDisabled" }
+  /api/integrations/v1/assignments:
+    post:
+      tags: [Assignments]
+      summary: Assign a course or program to a learner
+      description: |
+        Assigns one title to one learner, under the organization's seats, the
+        way a manager assigns it in the app. `productId` is a `productId` from
+        `GET /catalog` (a course or a program). The learner is named by the
+        `externalId` you created or linked them under (or by `userId`) and must
+        be an active member of your organization.
+
+        Safe to repeat: when the learner already holds an active assignment for
+        the title, nothing is written and the call answers `200` with
+        `created: false` and that assignment. A new assignment answers `201`
+        with `created: true`; its window is 365 days, as for a manager. A
+        program is one assignment (its courses are tracked inside it). No
+        email is sent to the learner.
+
+        Checks, in order: the organization's Basic subscription is active
+        (`403 ORG_BASIC_SUBSCRIPTION_LAPSED`), the learner is yours
+        (`404 INTEGRATION_USER_NOT_FOUND`, `403 INTEGRATION_USER_OUT_OF_SCOPE`),
+        the learner is active (`400 INTEGRATION_BAD_INPUT` when deactivated;
+        reactivate them with `PATCH /users/status`), the organization carries
+        the title (`404 PRODUCT_NOT_AVAILABLE`, the same answer for a title that
+        does not exist, one that belongs to another organization, and a
+        superseded `renewOnly` edition), and a seat is left for it this license year
+        (`409 SEATS_EXHAUSTED`; buy more seats for the title in the app).
+        Requires the `assignments:write` scope. Limit: 60 a minute per key.
+      parameters:
+        - $ref: "#/components/parameters/TenantHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAssignmentRequest"
+            example:
+              externalId: E-1042
+              productId: course-6f1c2a7e-3b0d-4c55-9a61-2d6c8f0e41aa
+      responses:
+        "201":
+          description: Assignment written.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateAssignmentResponse"
+              example:
+                created: true
+                assignment:
+                  assignmentId: 0b6f3c1e-9a52-4d0e-8f4b-7c1d2e3a4b5c
+                  userId: 3e8d9a40-1c2b-4f6d-a7e5-9b0c1d2e3f4a
+                  externalId: E-1042
+                  productId: course-6f1c2a7e-3b0d-4c55-9a61-2d6c8f0e41aa
+                  productType: course
+                  title: Infection Control
+                  status: assigned
+                  assignedAt: "2026-11-19T18:30:00.000Z"
+                  completedAt: null
+                  expiresAt: null
+        "200":
+          description: The learner already held an active assignment for this title; nothing was written.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateAssignmentResponse"
+              example:
+                created: false
+                assignment:
+                  assignmentId: 0b6f3c1e-9a52-4d0e-8f4b-7c1d2e3a4b5c
+                  userId: 3e8d9a40-1c2b-4f6d-a7e5-9b0c1d2e3f4a
+                  externalId: E-1042
+                  productId: course-6f1c2a7e-3b0d-4c55-9a61-2d6c8f0e41aa
+                  productType: course
+                  title: Infection Control
+                  status: in_progress
+                  assignedAt: "2026-11-19T18:30:00.000Z"
+                  completedAt: null
+                  expiresAt: null
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
+    get:
+      tags: [Assignments]
+      summary: Read a learner's assignments and where each stands
+      description: |
+        Lists the learner's assignments in your organization, newest first,
+        each with its status. `status` is what the learner and their manager
+        see in the app for that title (`assigned` is the app's "not started");
+        it is not a second definition. `completedAt` and `expiresAt` are the
+        completion the status rests on and its certificate expiry; both are
+        null until the learner completes, and `expiresAt` stays null for a title
+        that does not expire. Your organization's assignments are listed, plus the learner's assignments that carry no organization (their own purchase, a partner launch); another organization's are never listed. `completedAt` is null for a `completed` or `expired` row whose status rests on a compliance requirement with no completion record of its own.
+        A learner who is not yours returns `404 INTEGRATION_USER_NOT_FOUND`.
+        Requires the `assignments:read` scope. Limit: 30 a minute per key.
+      parameters:
+        - in: query
+          name: externalId
+          required: false
+          description: The learner's id in your system. Send this or `userId`.
+          schema:
+            type: string
+        - in: query
+          name: userId
+          required: false
+          description: The platform user id. Send this or `externalId`.
+          schema:
+            type: string
+        - in: query
+          name: productId
+          required: false
+          description: Only this title's assignments.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/TenantHeader"
+        - $ref: "#/components/parameters/TenantQuery"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssignmentListResponse"
+              example:
+                assignments:
+                  - assignmentId: 0b6f3c1e-9a52-4d0e-8f4b-7c1d2e3a4b5c
+                    userId: 3e8d9a40-1c2b-4f6d-a7e5-9b0c1d2e3f4a
+                    externalId: E-1042
+                    productId: course-6f1c2a7e-3b0d-4c55-9a61-2d6c8f0e41aa
+                    productType: course
+                    title: Infection Control
+                    status: completed
+                    assignedAt: "2026-11-19T18:30:00.000Z"
+                    completedAt: "2026-11-20T14:05:00.000Z"
+                    expiresAt: "2027-11-20T14:05:00.000Z"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
   /api/integrations/v1/sso:
     get:
       tags: [SSO]
       summary: Signed SSO launch (browser redirect)
       description: |
-        Browser-facing signed launch URL (legacy Topyx-compatible MD5
-        signature). Unlike the REST endpoints, this route does not use API-key
+        Browser-facing signed launch URL. The signature is
+        HMAC-SHA256(key = ssoSecret, message = username + sessionTimeOut +
+        timestamp), lowercase hex (64 characters). The legacy Topyx scheme,
+        MD5(ssoSecret + username + sessionTimeOut + timestamp) (32
+        characters), is still accepted so existing links keep working while a
+        partner switches; it is retired on a date agreed with each partner,
+        after which an MD5-signed launch is refused. The scheme is detected
+        from the signature's length; there is no extra parameter.
+        Unlike the REST endpoints, this route does not use API-key
         auth or the JSON error envelope: failures redirect to the login page
         with an explanatory message. `organizationTenantId` is required when
         the integration has multiple active org connections. Unknown usernames
@@ -650,7 +863,11 @@ paths:
         - in: query
           name: signature
           required: true
-          description: MD5(secret + username + sessionTimeOut + timestamp), lowercase hex.
+          description: >-
+            HMAC-SHA256(key = ssoSecret, message = username + sessionTimeOut +
+            timestamp), lowercase hex (64 characters). Legacy
+            MD5(ssoSecret + username + sessionTimeOut + timestamp) (32
+            characters) is accepted until retired.
           schema:
             type: string
         - in: query
@@ -716,6 +933,92 @@ paths:
       responses:
         "302":
           description: Redirect into the platform on success, or to /login with an error message on failure.
+  /api/integrations/{slug}/hire-dates:
+    post:
+      tags: [Users]
+      summary: Set learner hire dates
+      description: |
+        Pushes hire dates for learners in the organization connected to the API key.
+        Requires the `users:write` scope. The `{slug}` must be the integration that owns the key.
+        Each employee needs `hireDate` (`YYYY-MM-DD`) and at least one of `externalId` or `email`.
+        A hire date may be up to 60 days in the future (counted in UTC days), for someone who has not
+        started yet; one further out, or before 1950, is skipped with the reason.
+        A row that does not match a learner is skipped and reported; it does not fail the batch.
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/TenantHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [employees]
+              properties:
+                employees:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [hireDate]
+                    properties:
+                      externalId:
+                        type: string
+                      email:
+                        type: string
+                      hireDate:
+                        type: string
+                        description: Calendar date, YYYY-MM-DD.
+      responses:
+        "200":
+          description: Per-row result. Matched rows are updated; unmatched or invalid rows are skipped.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, updated, skipped, results]
+                properties:
+                  total:
+                    type: integer
+                  updated:
+                    type: integer
+                  skipped:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      required: [externalId, email, status]
+                      properties:
+                        externalId:
+                          type: string
+                          nullable: true
+                        email:
+                          type: string
+                          nullable: true
+                        status:
+                          type: string
+                          enum: [updated, skipped]
+                        matchedBy:
+                          type: string
+                          enum: [external_id, email]
+                        reason:
+                          type: string
+                        userId:
+                          type: string
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/FeatureDisabled" }
 components:
   securitySchemes:
     ApiKeyHeader:
@@ -723,15 +1026,16 @@ components:
       in: header
       name: x-api-key
       description: >-
-        Keys may be scoped (users:read, users:write, reports:read) and may expire.
-        An expired key returns 401 UNAUTHORIZED; a key missing the endpoint's scope
-        returns 403 INSUFFICIENT_SCOPE. Legacy admin-issued keys without scopes have
-        full access.
+        Keys may be scoped (users:read, users:write, reports:read, assignments:read, assignments:write) and may expire.
+        An expired key returns 401 UNAUTHORIZED; a key missing the endpoint's scope,
+        including a key with an empty scope list, returns 403 INSUFFICIENT_SCOPE.
       # Machine-readable scope catalog; a CI drift test keeps this in sync with the server.
       x-integration-scopes:
         - users:read
         - users:write
         - reports:read
+        - assignments:read
+        - assignments:write
     BearerApiKey:
       type: http
       scheme: bearer
@@ -792,19 +1096,19 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
     Forbidden:
-      description: Connection forbidden/inactive or user out of scope.
+      description: Connection forbidden/inactive, user out of scope, key missing the endpoint's scope, or (assignments) the organization's Basic subscription has ended.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
     NotFound:
-      description: User not found for this integration.
+      description: User not found for this integration, or (assignments) a title the organization does not carry.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
     Conflict:
-      description: Duplicate externalId/email/username, or idempotent request still in flight.
+      description: Duplicate externalId/email/username, idempotent request still in flight, or (assignments) no seats left for the title.
       content:
         application/json:
           schema:
@@ -863,12 +1167,15 @@ components:
             - INTEGRATION_CONNECTION_INACTIVE
             - INTEGRATION_USER_OUT_OF_SCOPE
             - INSUFFICIENT_SCOPE
+            - ORG_BASIC_SUBSCRIPTION_LAPSED
             - INTEGRATION_USER_NOT_FOUND
+            - PRODUCT_NOT_AVAILABLE
             - IDEMPOTENCY_REQUEST_IN_FLIGHT
             - INTEGRATION_EXTERNAL_ID_TAKEN
             - INTEGRATION_USER_ALREADY_LINKED
             - USER_EMAIL_TAKEN
             - USERNAME_TAKEN
+            - SEATS_EXHAUSTED
             - IDEMPOTENCY_KEY_REUSED
             - RATE_LIMITED
             - INTERNAL_ERROR
@@ -946,6 +1253,13 @@ components:
           type: string
         userName:
           type: string
+          description: The account's own platform username.
+        integrationUserName:
+          type: string
+          description: |
+            Present when the create linked an existing account instead of
+            creating one: the `userName` you sent. Keep using it; SSO and
+            `GET /users/exists` resolve it to this account.
         email:
           type: string
         status:
@@ -1121,8 +1435,18 @@ components:
           description: Pass as the cursor query parameter to fetch the next page; null on the last page.
     CompletionRecord:
       type: object
-      required: [firstName, lastName, courseName, userId, completedDate]
+      required: [recordId, firstName, lastName, courseName, userId, completedDate]
       properties:
+        recordId:
+          type: string
+          format: uuid
+          description: >-
+            Platform transcript record id. One per completion, the same on
+            every pull of a range that includes it, and unchanged when the id
+            the completion is reported under changes (a migrated or aliased
+            row). Key stored completions on this, not on
+            (userId, courseId, completedDate), so a re-pull of a range never
+            creates a second record. Added in 1.2.0.
         userName:
           type: string
           nullable: true
@@ -1136,13 +1460,23 @@ components:
         courseId:
           type: integer
           nullable: true
-          description: Legacy numeric course id when available; null on program rows.
+          description: >-
+            Legacy numeric course id when available; null on program rows. For a
+            completion migrated from Topyx this is the Topyx course id the
+            completion was recorded under, the same id the SSO launch accepts,
+            even when the platform filed the record on a content-identical
+            twin product; `productId`, `courseName` and `code` describe that
+            same course.
         productId:
           type: string
           format: uuid
           description: >-
-            Platform product id of the completed training; joins to the
-            catalog's `productId` for every product type. Added in 1.1.0.
+            Platform product id of the completed training. For a completion
+            earned on the platform it joins to the catalog's `productId`; for
+            a completion migrated from Topyx it is the product the recorded
+            Topyx id maps to, which the organization's catalog may not list,
+            so key migrated rows on `courseId` / `legacyProgramId`. Added in
+            1.1.0.
         productType:
           type: string
           enum: [course, program, class]
@@ -1151,9 +1485,11 @@ components:
           type: integer
           nullable: true
           description: >-
-            Legacy numeric program id on program rows, resolved from the same
-            sources as the catalog's `legacyProgramId`; null for courses and
-            classes. Added in 1.1.0.
+            Legacy numeric program id on program rows; null for courses and
+            classes. For a program completion migrated from Topyx it is the
+            Topyx program id the completion was recorded under; otherwise it
+            is resolved from the same sources as the catalog's
+            `legacyProgramId`. Added in 1.1.0.
         userId:
           type: string
           format: uuid
@@ -1253,14 +1589,17 @@ components:
           type: integer
           nullable: true
           description: >-
-            Legacy numeric course id — the id the completions report emits as
-            `courseId` and SSO accepts as `courseId`/`cid`.
+            Numeric course id, the id the completions report emits as
+            `courseId` and SSO accepts as `courseId`/`cid`. A Topyx id for a
+            migrated course; a TeTS number (six digits from 100000) for a course
+            built in TeTS. Null only for classes.
         legacyProgramId:
           type: integer
           nullable: true
           description: >-
-            Legacy numeric program id — programs deep-link via the SSO
-            `programId` parameter.
+            Numeric program id; programs deep-link via the SSO `programId`
+            parameter. A Topyx id for a migrated program, a TeTS number for a
+            program built in TeTS.
         renewOnly:
           type: boolean
           description: >-
@@ -1303,6 +1642,75 @@ components:
             $ref: "#/components/schemas/CatalogItem"
         pagination:
           $ref: "#/components/schemas/Pagination"
+    CreateAssignmentRequest:
+      type: object
+      required: [productId]
+      description: Send `productId` and exactly one of `externalId` / `userId`.
+      properties:
+        externalId:
+          type: string
+          description: The learner's id in your system (the `externalId` they were created or linked under).
+        userId:
+          type: string
+          description: The platform user id (`userId` from the user calls). Alternative to `externalId`.
+        productId:
+          type: string
+          description: A `productId` from `GET /catalog`; a course or a program your organization carries.
+    Assignment:
+      type: object
+      required: [assignmentId, userId, externalId, productId, productType, title, status, assignedAt, completedAt, expiresAt]
+      properties:
+        assignmentId:
+          type: string
+        userId:
+          type: string
+        externalId:
+          type: string
+        productId:
+          type: string
+          description: Joins to the catalog's `productId`.
+        productType:
+          type: string
+          enum: [course, program, class]
+        title:
+          type: string
+        status:
+          type: string
+          enum: [assigned, in_progress, completed, expired]
+          description: >-
+            The status the app shows the learner and their manager for this title.
+            `assigned` is the app's "not started"; `expired` is a completion whose
+            certificate has lapsed, so the title is due again.
+        assignedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the title was last completed in this assignment's cycle; null until then.
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Certificate expiry of that completion; null until completed, or when the title does not expire.
+    CreateAssignmentResponse:
+      type: object
+      required: [assignment, created]
+      properties:
+        assignment:
+          $ref: "#/components/schemas/Assignment"
+        created:
+          type: boolean
+          description: true when this call wrote the assignment (201); false when it already existed (200).
+    AssignmentListResponse:
+      type: object
+      required: [assignments]
+      properties:
+        assignments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Assignment"
     GroupItem:
       type: object
       required: [groupId, name, parentGroupId, isOrganizationRoot, acceptsMembers, legacyGroupId, createdAt, updatedAt]

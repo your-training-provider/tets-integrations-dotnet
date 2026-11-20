@@ -26,6 +26,9 @@ public class ErrorMappingTests
     [InlineData("RATE_LIMITED", TetsErrorCode.RateLimited)]
     [InlineData("INTERNAL_ERROR", TetsErrorCode.InternalError)]
     [InlineData("FEATURE_DISABLED", TetsErrorCode.FeatureDisabled)]
+    [InlineData("ORG_BASIC_SUBSCRIPTION_LAPSED", TetsErrorCode.OrgBasicSubscriptionLapsed)]
+    [InlineData("PRODUCT_NOT_AVAILABLE", TetsErrorCode.ProductNotAvailable)]
+    [InlineData("SEATS_EXHAUSTED", TetsErrorCode.SeatsExhausted)]
     public void MapsEveryStableCode(string wire, TetsErrorCode expected)
         => Assert.Equal(expected, TetsErrorCodeMapper.Map(wire));
 

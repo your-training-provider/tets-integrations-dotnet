@@ -8,7 +8,10 @@ using TeTS.Integrations.Sso;
 // Required env: TETS_BASE_URL, TETS_API_KEY
 // Optional env: TETS_SSO_SECRET, TETS_INTEGRATION_SLUG, TETS_TENANT_ID, TETS_COURSE_ID,
 //               TETS_GROUP_ID (group to place the test user in; without it the server uses the
-//               connection's configured default group, or rejects the create if none is configured)
+//               connection's configured default group, or rejects the create if none is configured;
+//               API access keys have no default group, so set it for them)
+//               TETS_ASSIGN_PRODUCT_ID (a catalog productId; enables the assignment steps, which need
+//               an organization's own API access key with the assignments:* scopes)
 
 static string? Env(string name) =>
     Environment.GetEnvironmentVariable(name) is { Length: > 0 } v ? v : null;
@@ -103,6 +106,31 @@ await Step("6b. groups (first page)", async () =>
     return first is null
         ? "0 groups visible to this connection"
         : $"saw {seen} group(s); first: name={first.Name} legacyGroupId={first.LegacyGroupId ?? "(null)"} acceptsMembers={first.AcceptsMembers}";
+});
+
+// 6c. assign a title to the smoke user, then assign again: the repeat must answer created=false
+await Step("6c. assign a title (and repeat)", async () =>
+{
+    if (Env("TETS_ASSIGN_PRODUCT_ID") is not { } productId)
+        return "SKIPPED (set TETS_ASSIGN_PRODUCT_ID to enable; needs an API access key)";
+    var request = new CreateAssignmentRequest { ExternalId = externalId, ProductId = productId };
+    var first = await client.Assignments.AssignAsync(request);
+    var repeat = await client.Assignments.AssignAsync(request);
+    if (repeat.Created || repeat.Assignment.AssignmentId != first.Assignment.AssignmentId)
+        throw new InvalidOperationException(
+            $"repeat assign was not idempotent: created={repeat.Created} assignmentId={repeat.Assignment.AssignmentId}");
+    return $"assignmentId={first.Assignment.AssignmentId} title={first.Assignment.Title} created={first.Created} repeat.created={repeat.Created}";
+});
+
+// 6d. read the smoke user's assignments back
+await Step("6d. assignment status", async () =>
+{
+    if (Env("TETS_ASSIGN_PRODUCT_ID") is not { } productId)
+        return "SKIPPED (set TETS_ASSIGN_PRODUCT_ID to enable; needs an API access key)";
+    var assignments = await client.Assignments.GetByExternalIdAsync(externalId, productId);
+    return assignments.Count == 0
+        ? throw new InvalidOperationException("the assignment just made is not listed")
+        : string.Join("; ", assignments.Select(a => $"{a.Title}: status={a.Status} assignedAt={a.AssignedAt:u}"));
 });
 
 // 7. SSO launch URL (printed for manual browser verification)
