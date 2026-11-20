@@ -44,6 +44,20 @@ public enum TetsErrorCode
     /// <summary>The Integrations API is disabled on this environment.</summary>
     FeatureDisabled,
     /// <summary>
+    /// The organization's Basic subscription has ended, so an API access key cannot assign training
+    /// or create learners until it is renewed (HTTP 403).
+    /// </summary>
+    OrgBasicSubscriptionLapsed,
+    /// <summary>
+    /// The organization does not carry the title you tried to assign: an unknown product id, another
+    /// organization's product, or a superseded <c>RenewOnly</c> edition all get this answer (HTTP 404).
+    /// </summary>
+    ProductNotAvailable,
+    /// <summary>
+    /// Every seat for the title is used this license year; buy more seats for it in the app (HTTP 409).
+    /// </summary>
+    SeatsExhausted,
+    /// <summary>
     /// Client-side: pagination did not advance (the SDK aborted a stalled cursor loop); never sent
     /// by the server.
     /// </summary>
@@ -74,6 +88,9 @@ public static class TetsErrorCodeMapper
         ["RATE_LIMITED"] = TetsErrorCode.RateLimited,
         ["INTERNAL_ERROR"] = TetsErrorCode.InternalError,
         ["FEATURE_DISABLED"] = TetsErrorCode.FeatureDisabled,
+        ["ORG_BASIC_SUBSCRIPTION_LAPSED"] = TetsErrorCode.OrgBasicSubscriptionLapsed,
+        ["PRODUCT_NOT_AVAILABLE"] = TetsErrorCode.ProductNotAvailable,
+        ["SEATS_EXHAUSTED"] = TetsErrorCode.SeatsExhausted,
     };
 
     /// <summary>Returns the enum for a wire code; <see cref="TetsErrorCode.Unknown"/> for null/unrecognized.</summary>

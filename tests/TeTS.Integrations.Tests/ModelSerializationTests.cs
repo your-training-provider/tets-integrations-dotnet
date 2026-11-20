@@ -102,6 +102,50 @@ public class ModelSerializationTests
     }
 
     [Fact]
+    public void CompletionRecord_CarriesRecordId()
+    {
+        // Contract 1.2.0: recordId is the stable key for stored completions.
+        const string json = """
+        {"recordId":"5d2c8e1a-7f3b-4e9c-a1d6-2b8f0c4e7a93","firstName":"Jane","lastName":"Doe",
+         "courseName":"CPR Basics","courseId":4521,"userId":"u-1","completedDate":"2026-09-12T15:04:05.000Z"}
+        """;
+        var c = JsonSerializer.Deserialize<CompletionRecord>(json, TetsJson.Options)!;
+        Assert.Equal("5d2c8e1a-7f3b-4e9c-a1d6-2b8f0c4e7a93", c.RecordId);
+    }
+
+    [Fact]
+    public void CompletionRecord_ToleratesPre120ServerWithoutRecordId()
+    {
+        const string json = """
+        {"firstName":"Casey","lastName":"Lee","courseName":"Fire Safety","courseId":42,
+         "userId":"u-1","completedDate":"2026-01-15T10:00:00Z"}
+        """;
+        Assert.Equal("", JsonSerializer.Deserialize<CompletionRecord>(json, TetsJson.Options)!.RecordId);
+    }
+
+    [Fact]
+    public void CreateUserResult_IntegrationUserName_IsSetOnlyWhenTheCreateLinkedAnExistingAccount()
+    {
+        const string linked = """
+        {"userId":"u-1","externalId":"E-1","userName":"casey.lee2","integrationUserName":"casey.lee",
+         "email":"c@example.com","status":"active","groupIds":["g1"]}
+        """;
+        var result = JsonSerializer.Deserialize<CreateUserResult>(linked, TetsJson.Options)!;
+        Assert.Equal("casey.lee2", result.UserName);
+        Assert.Equal("casey.lee", result.IntegrationUserName);
+
+        var plain = JsonSerializer.Deserialize<CreateUserResult>(linked.Replace("\"integrationUserName\":\"casey.lee\",", ""), TetsJson.Options)!;
+        Assert.Null(plain.IntegrationUserName);
+    }
+
+    [Fact]
+    public void CreateAssignmentRequest_OmitsUnsetIdentifier()
+    {
+        var json = JsonSerializer.Serialize(new CreateAssignmentRequest { UserId = "u-1", ProductId = "p-1" }, TetsJson.Options);
+        Assert.Equal("""{"userId":"u-1","productId":"p-1"}""", json);
+    }
+
+    [Fact]
     public void User_ToleratesUnknownFields()
     {
         const string json = """

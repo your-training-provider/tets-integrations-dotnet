@@ -44,10 +44,11 @@ public sealed class TetsIntegrationsClient : IDisposable
         _integrationSlug = options.IntegrationSlug;
         _ssoSecret = options.SsoSecret;
         _connection = new ApiConnection(httpClient, options, info => LastRateLimit = info);
-        Users = new UsersResource(_connection);
+        Users = new UsersResource(_connection, options.IntegrationSlug);
         Reports = new ReportsResource(_connection);
         Catalog = new CatalogResource(_connection);
         Groups = new GroupsResource(_connection);
+        Assignments = new AssignmentsResource(_connection);
     }
 
     /// <summary>Validates before allocating, so invalid options never leave an undisposed HttpClient behind.</summary>
@@ -90,6 +91,12 @@ public sealed class TetsIntegrationsClient : IDisposable
 
     /// <summary>Organization group directory.</summary>
     public GroupsResource Groups { get; }
+
+    /// <summary>
+    /// Training assignment and status. Needs the <c>assignments:write</c> / <c>assignments:read</c>
+    /// scopes, which only an organization's own API access keys carry.
+    /// </summary>
+    public AssignmentsResource Assignments { get; }
 
     /// <summary>
     /// Signed SSO launch URL builder. Requires <see cref="TetsOptions.IntegrationSlug"/> and

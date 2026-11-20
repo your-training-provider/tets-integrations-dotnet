@@ -7,12 +7,18 @@ using TeTS.Integrations.Models;
 
 namespace TeTS.Integrations.Resources;
 
-/// <summary>User provisioning and lifecycle: create, look up, list, update, link, activate/deactivate.</summary>
+/// <summary>User provisioning and lifecycle: create, look up, list, update, link, activate/deactivate, hire dates.</summary>
 public sealed class UsersResource
 {
     private const string BasePath = "/api/integrations/v1/users";
     private readonly ApiConnection _connection;
-    internal UsersResource(ApiConnection connection) => _connection = connection;
+    private readonly string? _integrationSlug;
+
+    internal UsersResource(ApiConnection connection, string? integrationSlug = null)
+    {
+        _connection = connection;
+        _integrationSlug = integrationSlug;
+    }
 
     /// <summary>
     /// Creates a platform user linked to your integration. Retries are safe: the SDK sends an
@@ -186,6 +192,48 @@ public sealed class UsersResource
             throw new TetsApiException(HttpStatusCode.OK, TetsErrorCode.Unknown,
                 "SDK check failed: the server response did not contain the expected 'user' object.", requestId: null, details: null, rawBody: null);
         return result;
+    }
+
+    /// <summary>
+    /// Sets hire dates for learners in your organization, matching each row by <c>ExternalId</c> or
+    /// <c>Email</c>. A row that matches no learner, or carries a date before 1950 or more than 60 days in
+    /// the future, is skipped and reported in the result; it does not fail the batch.
+    /// </summary>
+    /// <remarks>
+    /// The route is addressed by your integration's slug, so <see cref="TetsOptions.IntegrationSlug"/>
+    /// must be set (<c>PingAsync</c> reports it as <c>IntegrationSlug</c>). Requires the
+    /// <c>users:write</c> scope. Setting the same dates again is harmless, so the SDK's automatic retries
+    /// are safe.
+    /// </remarks>
+    /// <param name="employees">One row per learner; at least one.</param>
+    /// <param name="organizationTenantId">Overrides <see cref="TetsOptions.OrganizationTenantId"/> for this call only.</param>
+    /// <param name="cancellationToken">Token to cancel the request.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="employees"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="employees"/> is empty, or a row is null or sets neither <c>ExternalId</c> nor <c>Email</c>.</exception>
+    /// <exception cref="InvalidOperationException"><see cref="TetsOptions.IntegrationSlug"/> is not set.</exception>
+    /// <exception cref="TetsApiException">The server rejected the request.</exception>
+    public Task<SetHireDatesResult> SetHireDatesAsync(IEnumerable<HireDateUpdate> employees,
+        string? organizationTenantId = null, CancellationToken cancellationToken = default)
+    {
+        if (employees is null) throw new ArgumentNullException(nameof(employees));
+        var rows = employees.ToList();
+        if (rows.Count == 0)
+            throw new ArgumentException("Send at least one row.", nameof(employees));
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (rows[i] is null)
+                throw new ArgumentException($"Row {i} is null.", nameof(employees));
+            if (string.IsNullOrWhiteSpace(rows[i].ExternalId) && string.IsNullOrWhiteSpace(rows[i].Email))
+                throw new ArgumentException($"Row {i} needs ExternalId or Email to match a learner.", nameof(employees));
+        }
+        if (string.IsNullOrWhiteSpace(_integrationSlug))
+            throw new InvalidOperationException(
+                "Set TetsOptions.IntegrationSlug to set hire dates (PingAsync reports your integration's slug).");
+
+        return _connection.SendAsync<SetHireDatesResult>(HttpMethod.Post,
+            $"/api/integrations/{Uri.EscapeDataString(_integrationSlug!)}/hire-dates",
+            body: new SetHireDatesRequest { Employees = rows },
+            tenantOverride: organizationTenantId, ct: cancellationToken);
     }
 
     /// <summary>Sets a user's status to active.</summary>
